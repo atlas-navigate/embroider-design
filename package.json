@@ -1,0 +1,28 @@
+{
+  "name": "embroider-design",
+  "private": true,
+  "version": "0.1.0",
+  "description": "End-to-end embroidery CAD software: design shapes, text and image-based auto-digitized embroidery patterns, and export machine-ready files (Brother PES, DST, EXP, JEF, VP3, XXX).",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @embroider-design/engine && npm run build -w @embroider-design/app",
+    "test": "npm run test -w @embroider-design/engine",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "npm run build -w @embroider-design/engine && npm run typecheck -w @embroider-design/app",
+    "dev": "npm run build -w @embroider-design/engine && npm run dev -w @embroider-design/app",
+    "package": "npm run build && npm run package -w @embroider-design/app"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

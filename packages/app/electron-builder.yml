@@ -1,0 +1,32 @@
+appId: com.embroiderdesign.app
+productName: Embroider Design
+copyright: Copyright (c) 2026 Embroider Design contributors
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  # Per-user, so an update can be applied without an admin prompt. A
+  # per-machine install would make every silent update require elevation.
+  perMachine: false
+# Where the app looks for updates. electron-builder writes this into
+# `app-update.yml` inside the installer, which is the file `electron-updater`
+# reads at runtime — so a build without this block simply cannot self-update.
+publish:
+  - provider: github
+    owner: atlas-navigate
+    repo: embroider-design
+    releaseType: release

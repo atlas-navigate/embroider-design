@@ -1,0 +1,19 @@
+# Normalise text to LF in the repository; Windows checkouts still get CRLF.
+* text=auto
+
+# Embroidery files are binary. This matters more than it looks: the golden
+# fixtures are compared byte for byte, and DST in particular starts with an
+# ASCII header that can fool content detection into treating the whole file as
+# text — a single CR inserted into the stitch stream would corrupt it silently.
+*.dst binary
+*.exp binary
+*.jef binary
+*.pes binary
+*.pec binary
+*.vp3 binary
+*.xxx binary
+
+*.png binary
+*.ico binary
+*.ttf binary
+*.otf binary
