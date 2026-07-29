@@ -179,5 +179,38 @@ export async function checkForUpdatesInteractive(): Promise<void> {
       message: `Embroider Design ${app.getVersion()} is up to date.`,
       buttons: ['OK'],
     });
+    return;
   }
+
+  // Every remaining state means a check was already under way, so `checkForUpdates`
+  // returned early without starting a new one. Saying so matters: a menu item
+  // that answers nothing at all reads as broken, and the likeliest moment to
+  // click this one is during the check that runs 15 seconds after launch.
+  if (result.status === 'ready') {
+    await dialog.showMessageBox(window, {
+      type: 'info',
+      message: `Embroider Design ${result.version} is downloaded and ready.`,
+      detail: 'Use Restart in the banner to apply it, or it will install when you next quit.',
+      buttons: ['OK'],
+    });
+    return;
+  }
+  if (result.status === 'downloading') {
+    await dialog.showMessageBox(window, {
+      type: 'info',
+      message: result.version
+        ? `Downloading Embroider Design ${result.version}…`
+        : 'Downloading an update…',
+      detail: 'The status bar shows how it is going.',
+      buttons: ['OK'],
+    });
+    return;
+  }
+  await dialog.showMessageBox(window, {
+    type: 'info',
+    message:
+      result.status === 'checking' ? 'Already checking for updates…' : 'No update information yet.',
+    detail: result.status === 'checking' ? 'The status bar shows how it is going.' : result.message,
+    buttons: ['OK'],
+  });
 }
