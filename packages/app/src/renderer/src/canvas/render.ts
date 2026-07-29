@@ -189,6 +189,64 @@ export function drawSelection(
   context.restore();
 }
 
+/**
+ * A thin outline round each member of a multi-selection.
+ *
+ * The union box alone is ambiguous: with three of five layers selected it is
+ * impossible to tell which three. Outlining the members says so directly,
+ * without the clutter of a handled box per layer.
+ */
+export function drawSelectionMembers(
+  context: CanvasRenderingContext2D,
+  view: ViewTransform,
+  boxes: readonly BoundingBox[],
+  theme: CanvasTheme,
+): void {
+  if (boxes.length < 2) return;
+  context.save();
+  context.strokeStyle = theme.selection;
+  context.globalAlpha = 0.55;
+  context.lineWidth = 1;
+  for (const box of boxes) {
+    const topLeft = toScreen(view, { x: box.minX, y: box.minY });
+    const bottomRight = toScreen(view, { x: box.maxX, y: box.maxY });
+    context.strokeRect(
+      topLeft.x + 0.5,
+      topLeft.y + 0.5,
+      bottomRight.x - topLeft.x,
+      bottomRight.y - topLeft.y,
+    );
+  }
+  context.restore();
+}
+
+/** The rubber-band rectangle while dragging on empty canvas. */
+export function drawMarquee(
+  context: CanvasRenderingContext2D,
+  view: ViewTransform,
+  start: Point,
+  current: Point,
+  theme: CanvasTheme,
+): void {
+  const a = toScreen(view, start);
+  const b = toScreen(view, current);
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const width = Math.abs(b.x - a.x);
+  const height = Math.abs(b.y - a.y);
+
+  context.save();
+  context.fillStyle = theme.selection;
+  context.globalAlpha = 0.12;
+  context.fillRect(x, y, width, height);
+  context.globalAlpha = 1;
+  context.strokeStyle = theme.selection;
+  context.lineWidth = 1;
+  context.setLineDash([4, 3]);
+  context.strokeRect(x + 0.5, y + 0.5, width, height);
+  context.restore();
+}
+
 /** The in-progress shape while a tool is being dragged. */
 export function drawGhost(
   context: CanvasRenderingContext2D,

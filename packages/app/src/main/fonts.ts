@@ -1,17 +1,23 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { app } from 'electron';
 import type { FontFileInfo } from '../shared/ipc-contract.js';
 
 /**
- * Finding the fonts already on the machine.
+ * Finding fonts: the ones bundled with the app, and the ones already on the
+ * machine.
  *
- * The application bundles no fonts. A Windows install has a hundred and fifty
- * or more faces the user already owns and is already licensed to use, and
- * shipping half a dozen of our own would add a licensing surface while
- * offering a shorter list. Main only enumerates and reads the files — parsing
- * the name tables happens in the renderer, which already has opentype.js
- * loaded for digitizing.
+ * The machine's own fonts are still the bulk of the list — a Windows install
+ * has 150+ faces the user already owns. But a scan of a stock Windows 11
+ * machine turns up only four usable handwriting faces and no formal cursive at
+ * all: Brush Script, Lucida Handwriting and Monotype Corsiva arrive with
+ * Microsoft Office, not with Windows. Since a cursive monogram is the single
+ * most common embroidery job there is, the app now ships a set of open-licence
+ * scripts of its own. See `scripts/fetch-fonts.mjs` for what and from where.
+ *
+ * Main only enumerates and reads the files — parsing the name tables happens
+ * in the renderer, which already has opentype.js loaded for digitizing.
  */
 
 const FONT_EXTENSIONS = ['.ttf', '.otf'];
@@ -26,8 +32,27 @@ function isFontFile(name: string): boolean {
   return FONT_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
+/**
+ * Where the bundled fonts live.
+ *
+ * `extraResources` in `electron-builder.yml` copies `resources/fonts` next to
+ * the packaged app, which is `process.resourcesPath`. In development there is
+ * no such directory, so fall back to the folder in the source tree — otherwise
+ * the cursive faces would be missing from every `npm run dev` session and the
+ * font picker would look broken to whoever is working on it.
+ */
+export function bundledFontDirectory(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'fonts')
+    : join(app.getAppPath(), 'resources', 'fonts');
+}
+
 function fontDirectories(): string[] {
-  const directories: string[] = [];
+  // First, deliberately: `buildFontCatalog` keeps the first path it sees for a
+  // given face, so a bundled copy wins over a stale system install of the same
+  // family.
+  const directories: string[] = [bundledFontDirectory()];
+
   const windir = process.env.WINDIR ?? process.env.SystemRoot;
   if (windir) directories.push(join(windir, 'Fonts'));
 

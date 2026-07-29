@@ -114,6 +114,14 @@ export interface FontDescriptor {
   weight: number;
   italic: boolean;
   monospace: boolean;
+  /**
+   * OS/2 PANOSE, ten bytes classifying the design. Byte 0 is the family kind,
+   * and it is the most reliable single signal for "is this a script face" that
+   * a font carries about itself. Empty when the font omits the table.
+   */
+  panose?: number[];
+  /** OS/2 sFamilyClass; the high byte is the IBM family class. */
+  familyClass?: number;
 }
 
 export function describeFont(font: Font): FontDescriptor {
@@ -125,6 +133,7 @@ export function describeFont(font: Font): FontDescriptor {
   const post = font.tables.post as Record<string, number> | undefined;
   // macStyle bit 1 and fsSelection bit 0 both mean italic; fonts set either.
   const italic = ((head?.macStyle ?? 0) & 0x02) !== 0 || ((os2?.fsSelection ?? 0) & 0x01) !== 0;
+  const panose = (os2 as unknown as { panose?: unknown })?.panose;
   return {
     family,
     subfamily,
@@ -133,6 +142,8 @@ export function describeFont(font: Font): FontDescriptor {
     weight: os2?.usWeightClass ?? 400,
     italic,
     monospace: (post?.isFixedPitch ?? 0) !== 0,
+    ...(Array.isArray(panose) ? { panose: panose.map(Number) } : {}),
+    ...(os2?.sFamilyClass === undefined ? {} : { familyClass: os2.sFamilyClass }),
   };
 }
 

@@ -4,6 +4,7 @@ import {
   deserializeDocument,
   formatForExtension,
   readPattern,
+  mmToUnits,
   serializeDocument,
   unitsToMm,
   type FormatId,
@@ -16,6 +17,7 @@ import { DesignCanvas } from './canvas/DesignCanvas.js';
 import { StitchPreview } from './canvas/StitchPreview.js';
 import { LayerPanel } from './panels/LayerPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
+import { ShapesPanel } from './panels/ShapesPanel.js';
 import { ImageImportPanel } from './panels/ImageImportPanel.js';
 import { HoopPanel } from './panels/HoopPanel.js';
 import { ExportPanel } from './panels/ExportPanel.js';
@@ -41,11 +43,20 @@ const TOOLS: { id: ToolId; label: string; title: string; key: string }[] = [
   { id: 'text', label: 'T', title: 'Text (T)', key: 't' },
 ];
 
-type PanelTab = 'layers' | 'properties' | 'image' | 'hoop' | 'export';
+/** Arrow-key nudge directions, in document space (Y grows downwards). */
+const NUDGE_KEYS: Record<string, { x: number; y: number } | undefined> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+};
+
+type PanelTab = 'layers' | 'properties' | 'shapes' | 'image' | 'hoop' | 'export';
 
 const TABS: { id: PanelTab; label: string }[] = [
   { id: 'layers', label: 'Layers' },
   { id: 'properties', label: 'Settings' },
+  { id: 'shapes', label: 'Shapes' },
   { id: 'image', label: 'Image' },
   { id: 'hoop', label: 'Hoop' },
   { id: 'export', label: 'Export' },
@@ -204,10 +215,25 @@ export function App(): JSX.Element {
         state.togglePreview();
         return;
       case 'delete-layer':
-        if (state.selectedLayerId) state.removeLayer(state.selectedLayerId);
+        state.removeSelection();
         return;
       case 'duplicate-layer':
-        if (state.selectedLayerId) state.duplicateLayer(state.selectedLayerId);
+        state.duplicateSelection();
+        return;
+      case 'select-all':
+        state.selectAll();
+        return;
+      case 'deselect':
+        state.clearSelection();
+        return;
+      case 'group':
+        state.groupSelection();
+        return;
+      case 'ungroup':
+        state.ungroupSelection();
+        return;
+      case 'shapes':
+        setTab('shapes');
         return;
       case 'check-for-updates':
         void window.embroider.checkForUpdates().then((result) => {
@@ -237,28 +263,62 @@ export function App(): JSX.Element {
     };
   }, [confirmDiscard]);
 
-  // Tool shortcuts, but never while typing into a field.
+  // Editing shortcuts, but never while typing into a field.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const state = store.getState();
+      const control = event.ctrlKey || event.metaKey;
+
+      // Ctrl combinations also arrive from the application menu's accelerators.
+      // Handling them here as well keeps the shortcuts working when focus is
+      // somewhere the menu does not reach, and both paths call the same action.
+      if (control) {
+        switch (event.key.toLowerCase()) {
+          case 'a':
+            if (event.shiftKey) state.clearSelection();
+            else state.selectAll();
+            event.preventDefault();
+            return;
+          case 'g':
+            if (event.shiftKey) state.ungroupSelection();
+            else state.groupSelection();
+            event.preventDefault();
+            return;
+          default:
+            return;
+        }
+      }
+      if (event.altKey) return;
 
       if (event.key === 'Escape') {
-        store.getState().setTool('select');
-        store.getState().selectLayer(null);
+        state.setTool('select');
+        state.setPendingShape(null);
+        state.clearSelection();
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        const id = store.getState().selectedLayerId;
-        if (id) {
-          store.getState().removeLayer(id);
+        if (state.selectedLayerIds.length > 0) {
+          state.removeSelection();
           event.preventDefault();
         }
         return;
       }
+
+      const nudge = NUDGE_KEYS[event.key];
+      if (nudge) {
+        if (state.selectedLayerIds.length === 0) return;
+        // Shift nudges by a whole 5 mm; the plain step is 0.5 mm, which is
+        // about the finest adjustment that survives being stitched.
+        const step = mmToUnits(event.shiftKey ? 5 : 0.5);
+        state.moveSelectionBy(nudge.x * step, nudge.y * step);
+        event.preventDefault();
+        return;
+      }
+
       const match = TOOLS.find((entry) => entry.key === event.key.toLowerCase());
-      if (match) store.getState().setTool(match.id);
+      if (match) state.setTool(match.id);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -355,6 +415,7 @@ export function App(): JSX.Element {
           <div className="panel-scroll">
             {tab === 'layers' && <LayerPanel compiled={result} />}
             {tab === 'properties' && <PropertiesPanel compiled={result} />}
+            {tab === 'shapes' && <ShapesPanel />}
             {tab === 'image' && <ImageImportPanel />}
             {tab === 'hoop' && <HoopPanel compiled={result} />}
             {tab === 'export' && <ExportPanel compiled={result} />}

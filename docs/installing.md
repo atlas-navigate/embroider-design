@@ -47,18 +47,63 @@ If you would rather launch it from PowerShell:
 
 The app opens on an empty hoop. A reasonable first pass:
 
-1. Draw a shape with the rectangle or ellipse tool, or press **T** and type
+1. Open the **Shapes** tab and pick something — search for "pumpkin", "snowman"
+   or "rings", or browse the categories. Click the canvas to drop it, or drag
+   to set its size.
+2. Or draw your own with the rectangle or ellipse tool, or press **T** and type
    some text.
-2. In the **Settings** tab, pick a stitch type and adjust density. The design
+3. In the **Settings** tab, pick a stitch type and adjust density. The design
    re-stitches as you change it.
-3. Click **Stitch preview** to watch it sew, stitch by stitch, in order.
-4. Open the **Hoop** tab and confirm your design fits your machine's hoop.
-5. Go to **Export**, choose your machine's format, and save the file.
+4. Click **Stitch preview** to watch it sew, stitch by stitch, in order.
+5. Open the **Hoop** tab and confirm your design fits your machine's hoop.
+6. Go to **Export**, choose your machine's format, and save the file.
 
-Lettering uses **the fonts already installed on your PC** — nothing is bundled,
-so every typeface you own is available. When you pick one, the app measures its
-actual stroke width at your chosen size and tells you whether it will hold as
-satin stitching, and what size would work if it will not.
+## Shapes and icons
+
+There are 202 of them: the drawing shapes you would expect from a presentation
+tool, and seasonal icons for Halloween, Christmas, Valentine's, weddings,
+Easter, Thanksgiving, the 4th of July, birthdays, summer, school, pets, boats
+and nature.
+
+Icons made of several pieces — a snowman is body, hat, face, buttons, arms and
+a carrot nose — arrive as a **group**, already coloured and in a sensible
+sewing order. A group moves, scales and selects as one object. Press
+**Ctrl+Shift+G** to split it apart if you want to recolour a piece or delete
+one.
+
+## Fonts
+
+The app ships **28 typefaces** and also uses every font already installed on
+your PC. The bundled ones lean heavily to cursive — Great Vibes, Allura, Alex
+Brush, Parisienne, Sacramento, Italianno, Tangerine, Pacifico and more —
+because Windows on its own has almost no script faces: Brush Script and Lucida
+Handwriting come with Microsoft Office, not with Windows.
+
+Use the filter chips above the font list to narrow to **Cursive & script**,
+Serif, Sans serif, Display or Blackletter. Whichever you pick, the app measures
+its actual stroke width at your chosen size and tells you whether it will hold
+as satin stitching, and what size would work if it will not. Cursive faces are
+thin, so this matters more with them than with anything else.
+
+## Keyboard shortcuts
+
+| Keys | What it does |
+|---|---|
+| `Ctrl+A` | Select every layer |
+| `Ctrl+Shift+A` or `Esc` | Deselect |
+| `Ctrl+G` / `Ctrl+Shift+G` | Group / ungroup the selection |
+| Arrow keys | Nudge the selection 0.5 mm |
+| `Shift` + arrows | Nudge 5 mm |
+| `Ctrl+D` / `Delete` | Duplicate / delete the selection |
+| `Ctrl+L` | Shapes and icons |
+| `Ctrl+P` | Stitch preview |
+| `Ctrl+0` | Fit the hoop to the window |
+| `V R E P S L F T` | Select, rectangle, ellipse, polygon, star, line, freehand, text |
+
+On the canvas, **Ctrl-click** adds a layer to the selection, **Shift-click**
+extends through the stack, and dragging on empty space rubber-bands around
+everything it touches. Hold the **space bar** (or use the middle mouse button)
+to pan.
 
 ## Getting a design onto a Brother PE900
 
@@ -108,6 +153,8 @@ Uninstalling does not delete your designs or exported files.
 |---|---|
 | "Windows protected your PC" | Expected — the installer is unsigned. **More info ▸ Run anyway**. |
 | Your font is missing from the list | The app scans `C:\Windows\Fonts` and your per-user font folder. Use **Add font file…** to point at any other `.ttf` or `.otf`. |
+| The bundled cursive fonts are missing | They live in `resources\fonts` inside the install folder. If that folder is empty the installer did not finish; reinstall. |
+| A placed icon is one flat colour | You have selected the group and changed its thread. Ungroup with Ctrl+Shift+G to colour the pieces separately. |
 | A layer produced no stitches | Usually a shape too small or thin to stitch at the current density. The Layers panel says which layer and why. |
 | The machine will not read the file | Confirm the format is one your machine takes, and that the file is at the top level of the USB stick, not in a folder. |
 | Updates say "unsupported" | You are running a development build rather than an installed one. Only installed copies update. |

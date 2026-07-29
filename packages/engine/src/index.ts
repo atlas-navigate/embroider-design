@@ -59,3 +59,4 @@ export * from './stitchgen/index.js';
 export * from './lettering/index.js';
 export * from './autodigitize/index.js';
 export * from './document/index.js';
+export * from './library/index.js';

@@ -23,12 +23,21 @@ interface LayerPanelProps {
 
 export function LayerPanel({ compiled }: LayerPanelProps): JSX.Element {
   const layers = useDocumentStore((state) => state.document.layers);
-  const selectedLayerId = useDocumentStore((state) => state.selectedLayerId);
+  const selectedLayerIds = useDocumentStore((state) => state.selectedLayerIds);
   const selectLayer = useDocumentStore((state) => state.selectLayer);
+  const selectAll = useDocumentStore((state) => state.selectAll);
+  const clearSelection = useDocumentStore((state) => state.clearSelection);
+  const groupSelection = useDocumentStore((state) => state.groupSelection);
+  const ungroupSelection = useDocumentStore((state) => state.ungroupSelection);
   const updateLayer = useDocumentStore((state) => state.updateLayer);
   const removeLayer = useDocumentStore((state) => state.removeLayer);
   const duplicateLayer = useDocumentStore((state) => state.duplicateLayer);
   const moveLayer = useDocumentStore((state) => state.moveLayer);
+
+  const selected = new Set(selectedLayerIds);
+  const selectedGroups = new Set(
+    layers.filter((layer) => selected.has(layer.id) && layer.groupId).map((layer) => layer.groupId),
+  );
 
   if (layers.length === 0) {
     return (
@@ -43,22 +52,70 @@ export function LayerPanel({ compiled }: LayerPanelProps): JSX.Element {
 
   return (
     <div className="layer-list">
+      <div className="layer-toolbar">
+        <span className="muted">
+          {selected.size > 0
+            ? `${selected.size} of ${layers.length} selected`
+            : `${layers.length} layer${layers.length === 1 ? '' : 's'}`}
+        </span>
+        <span className="grow" />
+        <button type="button" onClick={selectAll} title="Select all layers (Ctrl+A)">
+          All
+        </button>
+        <button
+          type="button"
+          onClick={clearSelection}
+          disabled={selected.size === 0}
+          title="Deselect (Ctrl+Shift+A)"
+        >
+          None
+        </button>
+        <button
+          type="button"
+          onClick={groupSelection}
+          disabled={selected.size < 2}
+          title="Group so they move as one (Ctrl+G)"
+        >
+          Group
+        </button>
+        <button
+          type="button"
+          onClick={ungroupSelection}
+          disabled={selectedGroups.size === 0}
+          title="Split the group apart (Ctrl+Shift+G)"
+        >
+          Ungroup
+        </button>
+      </div>
+
       {/* Last sewn at the bottom of the list, like the stack it represents. */}
       {[...layers].reverse().map((layer, reverseIndex) => {
         const index = layers.length - 1 - reverseIndex;
         const result = compiled?.layers.find((entry) => entry.layerId === layer.id);
-        const selected = layer.id === selectedLayerId;
+        const isSelected = selected.has(layer.id);
+        const grouped = layer.groupId !== undefined;
+        const classes = ['layer-row'];
+        if (isSelected) classes.push('layer-row-selected');
+        if (grouped) classes.push('layer-row-grouped');
         return (
           <div
             key={layer.id}
-            className={selected ? 'layer-row layer-row-selected' : 'layer-row'}
-            onClick={() => selectLayer(layer.id)}
+            className={classes.join(' ')}
+            onClick={(event) =>
+              selectLayer(layer.id, {
+                additive: event.ctrlKey || event.metaKey,
+                range: event.shiftKey,
+              })
+            }
             role="button"
             tabIndex={0}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') selectLayer(layer.id);
             }}
           >
+            {grouped && (
+              <span className="group-mark" title="Part of a group — selecting one selects all" />
+            )}
             <button
               type="button"
               className="icon-button"

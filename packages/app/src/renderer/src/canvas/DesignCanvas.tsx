@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  compose,
+  boundingBoxUnion,
   createTextLayer,
   ellipse,
+  instantiateShape,
   mmToUnits,
   polyline,
   rectangle,
   regularPolygon,
-  scaleAround,
+  shapeById,
   star,
-  translation,
   type BoundingBox,
   type EmbroideryFont,
   type Layer,
@@ -24,7 +24,9 @@ import {
   drawGhost,
   drawHoop,
   drawLayer,
+  drawMarquee,
   drawSelection,
+  drawSelectionMembers,
   HANDLE_SIZE,
   toDocument,
   toScreen,
@@ -36,30 +38,39 @@ import {
  * Everything is drawn from the layers' own geometry — including text, which
  * comes straight from the font outlines rather than from compiled stitches, so
  * typing updates the canvas immediately instead of waiting on a digitize pass.
+ *
+ * Panning is middle-button or space-drag. It used to be shift-drag, which had
+ * to give way: shift-click is how every editor extends a selection, and
+ * multi-select needs it more than panning does.
  */
 
 type DragMode =
   | { kind: 'none' }
   | { kind: 'pan'; startX: number; startY: number; panX: number; panY: number }
-  | { kind: 'move'; layerId: string; last: Point }
-  | { kind: 'scale'; layerId: string; handle: number; bounds: BoundingBox }
+  | { kind: 'move'; last: Point; moved: boolean }
+  | { kind: 'scale'; handle: number; bounds: BoundingBox }
+  | { kind: 'marquee'; start: Point; current: Point }
   | { kind: 'draw'; start: Point; current: Point }
   | { kind: 'freehand'; points: Point[] };
 
 const CLICK_TOLERANCE_PX = 6;
 const IDENTITY_MATRIX = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+/** A click with the library tool, rather than a drag, drops the shape this big. */
+const DEFAULT_LIBRARY_SIZE_MM = 40;
 
 export function DesignCanvas(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragMode>({ kind: 'none' });
+  const spaceRef = useRef(false);
   const [, forceRender] = useState(0);
 
   const document = useDocumentStore((state) => state.document);
   const view = useDocumentStore((state) => state.view);
   const tool = useDocumentStore((state) => state.tool);
   const showGrid = useDocumentStore((state) => state.showGrid);
-  const selectedLayerId = useDocumentStore((state) => state.selectedLayerId);
+  const selectedLayerIds = useDocumentStore((state) => state.selectedLayerIds);
+  const pendingShapeId = useDocumentStore((state) => state.pendingShapeId);
   const store = useDocumentStore;
 
   const loadedFonts = useFontStore((state) => state.loaded);
@@ -79,6 +90,21 @@ export function DesignCanvas(): JSX.Element {
     (layer: Layer): BoundingBox | null => outlineBounds(layerOutline(layer, fontForLayer(layer))),
     [fontForLayer],
   );
+
+  /** Per-member boxes and their union, for drawing and for scale drags. */
+  const selectionBoxes = useCallback((): { boxes: BoundingBox[]; union: BoundingBox | null } => {
+    const ids = new Set(store.getState().selectedLayerIds);
+    const boxes: BoundingBox[] = [];
+    for (const layer of document.layers) {
+      if (!ids.has(layer.id)) continue;
+      const box = boundsOf(layer);
+      if (box) boxes.push(box);
+    }
+    return { boxes, union: boxes.reduce<BoundingBox | null>(
+      (acc, box) => (acc ? boundingBoxUnion(acc, box) : box),
+      null,
+    ) };
+  }, [document, boundsOf, store]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -103,15 +129,16 @@ export function DesignCanvas(): JSX.Element {
 
     drawHoop(context, view, document, DARK_THEME, showGrid);
 
+    const selected = new Set(selectedLayerIds);
     for (const layer of document.layers) {
       if (!layer.visible) continue;
-      drawLayer(context, view, layer, layer.id === selectedLayerId, fontForLayer(layer));
+      drawLayer(context, view, layer, selected.has(layer.id), fontForLayer(layer));
     }
 
-    const selected = document.layers.find((layer) => layer.id === selectedLayerId);
-    if (selected) {
-      const bounds = boundsOf(selected);
-      if (bounds) drawSelection(context, view, bounds, DARK_THEME);
+    const { boxes, union } = selectionBoxes();
+    if (union) {
+      drawSelectionMembers(context, view, boxes, DARK_THEME);
+      drawSelection(context, view, union, DARK_THEME);
     }
 
     const drag = dragRef.current;
@@ -119,8 +146,10 @@ export function DesignCanvas(): JSX.Element {
       drawGhost(context, view, ghostPoints(tool, drag.start, drag.current), true, DARK_THEME);
     } else if (drag.kind === 'freehand') {
       drawGhost(context, view, drag.points, false, DARK_THEME);
+    } else if (drag.kind === 'marquee') {
+      drawMarquee(context, view, drag.start, drag.current, DARK_THEME);
     }
-  }, [document, view, showGrid, selectedLayerId, tool, fontForLayer, boundsOf]);
+  }, [document, view, showGrid, selectedLayerIds, tool, fontForLayer, selectionBoxes]);
 
   useEffect(() => {
     draw();
@@ -131,6 +160,27 @@ export function DesignCanvas(): JSX.Element {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [draw]);
+
+  // Space held means the next drag pans, whatever tool is active.
+  useEffect(() => {
+    const down = (event: KeyboardEvent): void => {
+      if (event.code !== 'Space') return;
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      spaceRef.current = true;
+      // Stop the page scrolling under a canvas that has no scrollbar anyway.
+      event.preventDefault();
+    };
+    const up = (event: KeyboardEvent): void => {
+      if (event.code === 'Space') spaceRef.current = false;
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, []);
 
   // Fit the hoop once the canvas first has a size.
   const fitted = useRef(false);
@@ -162,13 +212,30 @@ export function DesignCanvas(): JSX.Element {
     return -1;
   };
 
+  const placeLibraryShape = (start: Point, end: Point): void => {
+    const state = store.getState();
+    const shape = state.pendingShapeId ? shapeById(state.pendingShapeId) : null;
+    if (!shape) return;
+
+    const width = Math.abs(end.x - start.x);
+    const height = Math.abs(end.y - start.y);
+    const dragged = width > mmToUnits(3) && height > mmToUnits(3);
+    const size = mmToUnits(DEFAULT_LIBRARY_SIZE_MM);
+    const box = dragged
+      ? { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width, height }
+      : { x: start.x - size / 2, y: start.y - size / 2, width: size, height: size };
+
+    state.addLayers(instantiateShape(shape, box, { index: state.document.layers.length }));
+    // One placement per arming, so a stray second click does not duplicate it.
+    state.setPendingShape(null);
+  };
+
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     event.currentTarget.setPointerCapture(event.pointerId);
     const screen = pointerPosition(event);
     const point = toDocument(view, screen.x, screen.y);
 
-    // Middle button or shift-drag pans, whatever tool is active.
-    if (event.button === 1 || event.shiftKey) {
+    if (event.button === 1 || spaceRef.current) {
       dragRef.current = {
         kind: 'pan',
         startX: screen.x,
@@ -181,15 +248,12 @@ export function DesignCanvas(): JSX.Element {
     if (event.button !== 0) return;
 
     if (tool === 'select') {
-      const selected = document.layers.find((layer) => layer.id === selectedLayerId);
-      if (selected && !selected.locked) {
-        const bounds = boundsOf(selected);
-        if (bounds) {
-          const handle = handleAt(screen, bounds);
-          if (handle >= 0) {
-            dragRef.current = { kind: 'scale', layerId: selected.id, handle, bounds };
-            return;
-          }
+      const { union } = selectionBoxes();
+      if (union) {
+        const handle = handleAt(screen, union);
+        if (handle >= 0) {
+          dragRef.current = { kind: 'scale', handle, bounds: union };
+          return;
         }
       }
 
@@ -199,11 +263,25 @@ export function DesignCanvas(): JSX.Element {
         const layer = document.layers[i];
         if (!layer.visible || layer.locked) continue;
         if (!hitTestOutline(layerOutline(layer, fontForLayer(layer)), point, tolerance)) continue;
-        store.getState().selectLayer(layer.id);
-        dragRef.current = { kind: 'move', layerId: layer.id, last: point };
+
+        const additive = event.ctrlKey || event.metaKey;
+        const already = store.getState().selectedLayerIds.includes(layer.id);
+        // Clicking inside an existing multi-selection keeps it, so the whole
+        // group can be dragged without having to re-select it first.
+        if (!already || additive || event.shiftKey) {
+          store.getState().selectLayer(layer.id, { additive, range: event.shiftKey });
+        }
+        dragRef.current = { kind: 'move', last: point, moved: false };
         return;
       }
-      store.getState().selectLayer(null);
+
+      // Empty canvas: rubber-band rather than simply deselecting.
+      dragRef.current = { kind: 'marquee', start: point, current: point };
+      return;
+    }
+
+    if (tool === 'library') {
+      dragRef.current = { kind: 'draw', start: point, current: point };
       return;
     }
 
@@ -247,10 +325,8 @@ export function DesignCanvas(): JSX.Element {
         const dx = point.x - drag.last.x;
         const dy = point.y - drag.last.y;
         drag.last = point;
-        store.getState().updateLayer(drag.layerId, (layer) => ({
-          ...layer,
-          transform: compose(layer.transform, translation(dx, dy)),
-        }));
+        if (dx !== 0 || dy !== 0) drag.moved = true;
+        store.getState().moveSelectionBy(dx, dy);
         return;
       }
       case 'scale': {
@@ -264,16 +340,16 @@ export function DesignCanvas(): JSX.Element {
         const uniform = Math.max(scaleX, scaleY);
         const factorX = clampScale(event.altKey ? scaleX : uniform);
         const factorY = clampScale(event.altKey ? scaleY : uniform);
-        store.getState().updateLayer(drag.layerId, (layer) => ({
-          ...layer,
-          transform: compose(layer.transform, scaleAround(factorX, factorY, pivot)),
-        }));
+        store.getState().scaleSelectionAround(factorX, factorY, pivot);
         // The transform has been applied, so measure the next move from here.
-        const updated = store.getState().document.layers.find((l) => l.id === drag.layerId);
-        const next = updated ? boundsOf(updated) : null;
+        const next = selectionBoxes().union;
         if (next) drag.bounds = next;
         return;
       }
+      case 'marquee':
+        drag.current = point;
+        forceRender((n) => n + 1);
+        return;
       case 'draw':
         drag.current = point;
         forceRender((n) => n + 1);
@@ -299,14 +375,47 @@ export function DesignCanvas(): JSX.Element {
     }
 
     if (drag.kind === 'draw') {
-      const geometry = shapeFromDrag(tool, drag.start, drag.current);
-      if (geometry) {
-        store.getState().addShape(geometry);
+      if (tool === 'library') {
+        placeLibraryShape(drag.start, drag.current);
         store.getState().setTool('select');
+      } else {
+        const geometry = shapeFromDrag(tool, drag.start, drag.current);
+        if (geometry) {
+          store.getState().addShape(geometry);
+          store.getState().setTool('select');
+        }
       }
     } else if (drag.kind === 'freehand' && drag.points.length >= 2) {
       store.getState().addShape(polyline(drag.points, false));
       store.getState().setTool('select');
+    } else if (drag.kind === 'marquee') {
+      const minX = Math.min(drag.start.x, drag.current.x);
+      const maxX = Math.max(drag.start.x, drag.current.x);
+      const minY = Math.min(drag.start.y, drag.current.y);
+      const maxY = Math.max(drag.start.y, drag.current.y);
+      const dragged = maxX - minX > mmToUnits(1) || maxY - minY > mmToUnits(1);
+
+      if (!dragged) {
+        // A plain click on empty canvas clears, which is what everyone expects.
+        if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+          store.getState().clearSelection();
+        }
+      } else {
+        const hits: string[] = [];
+        for (const layer of document.layers) {
+          if (!layer.visible || layer.locked) continue;
+          const box = boundsOf(layer);
+          // Intersecting, not enclosing: a band across a design should pick up
+          // everything it touches.
+          if (!box || box.maxX < minX || box.minX > maxX || box.maxY < minY || box.minY > maxY) {
+            continue;
+          }
+          hits.push(layer.id);
+        }
+        const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+        const existing = additive ? store.getState().selectedLayerIds : [];
+        store.getState().selectLayers([...new Set([...existing, ...hits])]);
+      }
     }
     forceRender((n) => n + 1);
   };
@@ -333,6 +442,11 @@ export function DesignCanvas(): JSX.Element {
         onPointerCancel={onPointerUp}
         onWheel={onWheel}
       />
+      {tool === 'library' && pendingShapeId && (
+        <div className="canvas-hint">
+          Click to place, or drag to set the size. Press Esc to cancel.
+        </div>
+      )}
     </div>
   );
 }
@@ -342,6 +456,16 @@ function clampScale(value: number): number {
 }
 
 function ghostPoints(tool: ToolId, start: Point, current: Point): Point[] {
+  if (tool === 'library') {
+    // The library ghost is the placement rectangle: the shape itself is only
+    // known once it has been scaled into it.
+    return [
+      { x: start.x, y: start.y },
+      { x: current.x, y: start.y },
+      { x: current.x, y: current.y },
+      { x: start.x, y: current.y },
+    ];
+  }
   const geometry = shapeFromDrag(tool, start, current);
   if (!geometry) return [start, current];
   if (geometry.type === 'polyline') return geometry.points;

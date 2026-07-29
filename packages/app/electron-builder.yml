@@ -9,6 +9,16 @@ files:
   - package.json
 asarUnpack:
   - resources/**
+# The bundled typefaces. These are read from disk by path at runtime, so they
+# have to sit beside the app rather than inside the asar archive — a font
+# inside asar has no real filesystem path for the font scanner to stat.
+# Without this block the app installs and runs, but every cursive face is
+# missing and lettering falls back to whatever the machine happens to have.
+extraResources:
+  - from: resources/fonts
+    to: fonts
+    filter:
+      - '**/*'
 win:
   target:
     - target: nsis

@@ -29,6 +29,16 @@ export interface LayerBase {
   /** Overrides on top of the document's defaults. */
   settings: PartialStitchSettings;
   transform: AffineMatrix;
+  /**
+   * Layers that move, scale and select as one.
+   *
+   * A flat id rather than a nested tree, deliberately. Compiling walks a flat
+   * z-ordered list and merges adjacent same-thread layers into one colour
+   * block; a tree would mean rewriting that walk to no user-visible benefit,
+   * and grouping is an editing convenience, not something the machine knows
+   * about. Optional, so existing project files load unchanged.
+   */
+  groupId?: string;
 }
 
 export interface ShapeLayer extends LayerBase {

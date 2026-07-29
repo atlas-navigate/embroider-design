@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   assessSuitability,
   capHeightOf,
+  categoriesPresent,
+  classifyFont,
+  FONT_CATEGORY_LABELS,
   measureStrokeWidth,
   minimumUsableCapHeight,
   mmToUnits,
@@ -9,6 +12,7 @@ import {
   sizeForCapHeight,
   unitsToMm,
   type FontCatalogEntry,
+  type FontCategory,
   type SuitabilityReport,
   type TextAlign,
   type TextLayer,
@@ -46,6 +50,7 @@ export function TextProperties({ layer }: { layer: TextLayer }): JSX.Element {
   const addFontFile = useFontStore((state) => state.addFontFile);
 
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<FontCategory | 'all'>('all');
   const entry = entryFor(layer.font);
   const font = entry ? (loadedFonts.get(entry.path) ?? null) : null;
 
@@ -69,11 +74,23 @@ export function TextProperties({ layer }: { layer: TextLayer }): JSX.Element {
     [font, measurement, settings],
   );
 
+  /**
+   * Which kinds of face this machine actually has, so the filter never offers
+   * a category that would come back empty.
+   */
+  const categories = useMemo(() => categoriesPresent(catalog), [catalog]);
+
   const shownFamilies = useMemo(() => {
-    if (!query.trim()) return families;
+    let shown = families;
+    if (category !== 'all') {
+      // A family counts as script if any of its styles does — classification
+      // works per face, and mixed families are rare but real.
+      shown = shown.filter((group) => group.styles.some((style) => classifyFont(style) === category));
+    }
     const needle = query.trim().toLowerCase();
-    return families.filter((group) => group.family.toLowerCase().includes(needle));
-  }, [families, query]);
+    if (needle) shown = shown.filter((group) => group.family.toLowerCase().includes(needle));
+    return shown;
+  }, [families, query, category]);
 
   const selectFont = (chosen: FontCatalogEntry): void => {
     updateLayer(layer.id, {
@@ -211,6 +228,25 @@ export function TextProperties({ layer }: { layer: TextLayer }): JSX.Element {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <div className="shape-categories">
+          <button
+            type="button"
+            className={category === 'all' ? 'chip chip-active' : 'chip'}
+            onClick={() => setCategory('all')}
+          >
+            All
+          </button>
+          {categories.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={category === id ? 'chip chip-active' : 'chip'}
+              onClick={() => setCategory(id)}
+            >
+              {FONT_CATEGORY_LABELS[id]}
+            </button>
+          ))}
+        </div>
         <div className="font-list">
           {shownFamilies.slice(0, 300).map((group) => (
             <div key={group.family} className="font-family">

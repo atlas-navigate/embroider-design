@@ -133,6 +133,84 @@ export function findLayer(document: DesignDocument, layerId: string): Layer | nu
   return document.layers.find((layer) => layer.id === layerId) ?? null;
 }
 
+/** Every layer sharing a group, in stack order. */
+export function layersInGroup(document: DesignDocument, groupId: string): Layer[] {
+  return document.layers.filter((layer) => layer.groupId === groupId);
+}
+
+/**
+ * Expands a selection to whole groups.
+ *
+ * Selecting one member of a group selects all of it — a snowman's hat is not
+ * something you meant to drag away from the snowman. Callers that genuinely
+ * want a single layer work with the id directly instead.
+ */
+export function expandSelectionToGroups(
+  document: DesignDocument,
+  layerIds: readonly string[],
+): string[] {
+  const groups = new Set<string>();
+  const ids = new Set(layerIds);
+  for (const layer of document.layers) {
+    if (ids.has(layer.id) && layer.groupId) groups.add(layer.groupId);
+  }
+  if (groups.size === 0) return [...ids];
+  // Stack order, so a later "move the selection" is predictable.
+  return document.layers
+    .filter((layer) => ids.has(layer.id) || (layer.groupId && groups.has(layer.groupId)))
+    .map((layer) => layer.id);
+}
+
+export function assignGroup(
+  document: DesignDocument,
+  layerIds: readonly string[],
+  groupId: string,
+): DesignDocument {
+  const ids = new Set(layerIds);
+  if (ids.size === 0) return document;
+  return touch(
+    document,
+    document.layers.map((layer) => (ids.has(layer.id) ? { ...layer, groupId } : layer)),
+  );
+}
+
+export function clearGroup(
+  document: DesignDocument,
+  layerIds: readonly string[],
+): DesignDocument {
+  const ids = new Set(layerIds);
+  if (ids.size === 0) return document;
+  let changed = false;
+  const layers = document.layers.map((layer) => {
+    if (!ids.has(layer.id) || layer.groupId === undefined) return layer;
+    changed = true;
+    const { groupId: _dropped, ...rest } = layer;
+    return rest as Layer;
+  });
+  return changed ? touch(document, layers) : document;
+}
+
+/**
+ * Brings a group's layers together in the stack.
+ *
+ * Grouping layers that are not adjacent would otherwise leave another layer
+ * sewn between them, which for same-coloured members means an extra thread
+ * change the user did not ask for. The group lands at the topmost member's
+ * position.
+ */
+export function gatherGroup(document: DesignDocument, groupId: string): DesignDocument {
+  const members = document.layers.filter((layer) => layer.groupId === groupId);
+  if (members.length < 2) return document;
+  const rest = document.layers.filter((layer) => layer.groupId !== groupId);
+  const topIndex = document.layers.findIndex((layer) => layer.groupId === groupId);
+  const insertAt = Math.min(
+    topIndex,
+    rest.length,
+  );
+  const layers = [...rest.slice(0, insertAt), ...members, ...rest.slice(insertAt)];
+  return touch(document, layers);
+}
+
 /**
  * The design's extent in document space.
  *

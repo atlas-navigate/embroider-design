@@ -39,13 +39,21 @@ export function buildMenu(getWindow: () => BrowserWindow | null): Menu {
     {
       label: '&Edit',
       submenu: [
-        { label: 'Duplicate layer', accelerator: 'CmdOrCtrl+D', click: send('duplicate-layer') },
-        { label: 'Delete layer', accelerator: 'Delete', click: send('delete-layer') },
+        // Deliberately not `role: 'selectAll'`. That role is Chromium's *text*
+        // select-all, and having it here meant Ctrl+A was swallowed before the
+        // renderer ever saw the key — selecting every layer was impossible.
+        { label: 'Select all layers', accelerator: 'CmdOrCtrl+A', click: send('select-all') },
+        { label: 'Deselect', accelerator: 'CmdOrCtrl+Shift+A', click: send('deselect') },
+        { type: 'separator' },
+        { label: 'Group', accelerator: 'CmdOrCtrl+G', click: send('group') },
+        { label: 'Ungroup', accelerator: 'CmdOrCtrl+Shift+G', click: send('ungroup') },
+        { type: 'separator' },
+        { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: send('duplicate-layer') },
+        { label: 'Delete', accelerator: 'Delete', click: send('delete-layer') },
         { type: 'separator' },
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' },
       ],
     },
     {
@@ -55,6 +63,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null): Menu {
         { label: 'Zoom out', accelerator: 'CmdOrCtrl+-', click: send('zoom-out') },
         { label: 'Fit to hoop', accelerator: 'CmdOrCtrl+0', click: send('zoom-fit') },
         { type: 'separator' },
+        { label: 'Shapes and icons', accelerator: 'CmdOrCtrl+L', click: send('shapes') },
         {
           label: 'Stitch preview',
           accelerator: 'CmdOrCtrl+P',

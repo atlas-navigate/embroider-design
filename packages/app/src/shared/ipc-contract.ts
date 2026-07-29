@@ -57,6 +57,11 @@ export type MenuCommand =
   | 'toggle-preview'
   | 'delete-layer'
   | 'duplicate-layer'
+  | 'select-all'
+  | 'deselect'
+  | 'group'
+  | 'ungroup'
+  | 'shapes'
   | 'check-for-updates'
   | 'about';
 

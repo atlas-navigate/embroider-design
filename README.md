@@ -37,13 +37,27 @@ shortcut is the answer. If you want to launch it from a terminal anyway:
 
 ## Features
 
+- **A library of 202 shapes and icons** — the drawing shapes you would expect
+  from a presentation tool (basic shapes, block arrows, stars and banners,
+  callouts, flowchart, equation) plus seasonal and thematic icons across
+  Halloween, Christmas, Valentine's, weddings, Easter, Thanksgiving, patriotic,
+  birthdays, summer, school, pets, nautical and nature. Every outline is drawn
+  as an embroidery silhouette rather than clip art, and multi-part icons — a
+  snowman, a jack-o'-lantern, a pair of wedding rings — arrive as a **group**
+  with their colours already set
 - Vector design canvas: rectangles, ellipses, stars, polygons, lines, freehand
   paths — draw, move, scale and rotate with live stitch regeneration
-- Lettering with **the fonts already on your PC**. Nothing is bundled: the app
-  scans `C:\Windows\Fonts` and your per-user font folder, and you can point it
-  at any other `.ttf`/`.otf`. It measures the font's real stroke width at the
-  size you chose and tells you plainly whether it will hold as satin — and what
-  size would.
+- **Multi-select and grouping**: Ctrl+A selects everything, Ctrl-click and
+  Shift-click extend a selection, a rubber-band drag picks up whatever it
+  touches, Ctrl+G groups so a design moves and scales as one, and the arrow
+  keys nudge by 0.5 mm (5 mm with Shift)
+- Lettering with **28 bundled typefaces plus every font on your PC**. The
+  bundled set is cursive-heavy on purpose — Great Vibes, Allura, Alex Brush,
+  Parisienne, Sacramento, Italianno, Tangerine and a dozen more — because
+  Windows itself ships almost no script faces. Filter the picker by Cursive,
+  Serif, Sans, Display or Blackletter. It measures the font's real stroke width
+  at the size you chose and tells you plainly whether it will hold as satin —
+  and what size would.
 - Image import with automatic digitizing: colour quantization, background
   removal, despeckling, contour tracing, and per-region fill/satin generation,
   with a live preview of the trace before you commit it
@@ -133,5 +147,7 @@ actual machine before trusting a larger or important one.**
 ## License
 
 MIT — see `LICENSE`. Third-party dependency licenses are listed in
-`THIRD_PARTY_LICENSES.md`. No fonts are bundled, so nothing here redistributes
-a typeface; lettering uses the fonts already installed on your machine.
+`THIRD_PARTY_LICENSES.md`, including the 28 bundled typefaces: 25 under the SIL
+Open Font License and 3 under Apache-2.0, each shipping with its own licence
+file. Lettering also uses the fonts already installed on your machine, which
+are never copied into a project or an exported design.

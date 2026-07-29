@@ -18,6 +18,13 @@ here so the list below is only about work that genuinely remains.
   Releases, checking every 30 minutes. See `docs/releasing.md`.
 - **Additional hoop presets** — 4x4, 5x7, 6x10, 8x8 and a 2x2 small-item hoop,
   with portrait/landscape orientation and a per-edge overflow report.
+- **Shape and icon library** — 202 entries in `packages/engine/src/library/`,
+  authored as SVG path data and validated as a whole by the test suite.
+  Multi-part icons instantiate as a group.
+- **Bundled typefaces** — 28 open-licence faces, cursive-heavy, alongside the
+  machine's own fonts, with PANOSE-based category filtering in the picker.
+- **Multi-select and grouping** — Ctrl+A, Ctrl-click, Shift-click, marquee
+  drag, Ctrl+G/Ctrl+Shift+G, arrow-key nudge.
 
 ## Design tiling across multiple hoopings
 
@@ -39,9 +46,24 @@ colour. What remains is the *purchasing* side:
   that catalog number is surfaced in the colour picker and the export summary
   as a shopping list.
 
+## Library and lettering, further work
+
+- **Rotation handles.** Layers carry a full affine transform and the maths is
+  already there; the canvas only exposes move and scale. Rotating a placed icon
+  currently means editing the transform by hand.
+- **User-defined shapes.** Saving a selection to the library as a reusable
+  entry, and importing an SVG as a library shape rather than a one-off layer.
+- **Elliptical arcs in the path parser.** The catalogue is authored entirely in
+  cubics, so `A` was left out deliberately (see `library/path-data.ts`). It
+  would be needed to import arbitrary third-party SVGs.
+- **Per-family font previews** rendered in the picker, so a script face can be
+  judged without selecting it first.
+
 ## Editing quality-of-life
 
-- Full undo/redo on the document store (beyond in-session React state).
+- Full undo/redo on the document store (beyond in-session React state). This is
+  more pressing now that Ctrl+A followed by an arrow key moves every layer at
+  once.
 - Autosave and crash recovery.
 - Project templates (blank hoop presets, a starter monogram layout, etc.).
 
