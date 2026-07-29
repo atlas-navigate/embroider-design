@@ -14,7 +14,13 @@ win:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-${version}-setup.${ext}
+  # Deliberately not ${productName}: that interpolates the space in "Embroider
+  # Design", and electron-builder writes the *sanitized* name (spaces to
+  # hyphens) into latest.yml. The two then disagree, and GitHub renames a
+  # hand-attached asset again — to dots — so the updater 404s looking for a file
+  # that exists under a third name. Hard-coding a space-free name makes the file
+  # on disk, the entry in latest.yml and the uploaded asset identical.
+  artifactName: Embroider-Design-${version}-setup.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

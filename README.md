@@ -6,6 +6,35 @@ stitch-out, and export machine-ready embroidery files — including Brother's
 `.PES` format for the Brother PE900 — without buying commercial digitizing
 software or format add-ons.
 
+## Install
+
+1. Download **`Embroider-Design-<version>-setup.exe`** from the
+   [latest release](https://github.com/atlas-navigate/embroider-design/releases/latest).
+2. Run it. Windows will show a blue **"Windows protected your PC"** screen —
+   click **More info ▸ Run anyway**. This appears because the installer is not
+   code signed, which is a cost rather than a technical obstacle; see
+   `docs/roadmap.md`.
+3. It installs for your user only, so there is no administrator prompt, and it
+   goes to `%LOCALAPPDATA%\Programs\Embroider Design` unless you change it.
+
+Then start it from the **Embroider Design** shortcut on your desktop or Start
+menu. Windows 10 or 11, 64-bit; nothing else to install.
+
+The app checks for a new version every 30 minutes, downloads it quietly in the
+background, and asks before restarting — it will never interrupt you mid-design.
+Full end-user instructions are in [`docs/installing.md`](docs/installing.md).
+
+## Running it
+
+It is a normal desktop application, so there is no command to memorize — the
+shortcut is the answer. If you want to launch it from a terminal anyway:
+
+| You have | Command |
+|---|---|
+| The installed app | `& "$env:LOCALAPPDATA\Programs\Embroider Design\Embroider Design.exe"` |
+| This source checkout | `npm install` then `npm run dev` |
+| A local build, not installed | `& ".\packages\app\release\win-unpacked\Embroider Design.exe"` |
+
 ## Features
 
 - Vector design canvas: rectangles, ellipses, stars, polygons, lines, freehand
@@ -51,10 +80,11 @@ This is an npm-workspaces monorepo:
   layer/property panels, stitch preview, export flow) built on top of the
   engine.
 
-See `docs/architecture.md` for the full design, `docs/file-formats.md` for
-notes on the embroidery file formats this project implements,
-`docs/releasing.md` for how to cut a release the auto-updater will find, and
-`docs/roadmap.md` for planned future work.
+See `docs/installing.md` for the end-user install guide,
+`docs/architecture.md` for the full design, `docs/file-formats.md` for notes on
+the embroidery file formats this project implements, `docs/releasing.md` for how
+to cut a release the auto-updater will find, and `docs/roadmap.md` for planned
+future work.
 
 ## Development
 

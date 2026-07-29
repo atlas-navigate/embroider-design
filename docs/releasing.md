@@ -42,11 +42,11 @@ restart. This document is how you make a release it can find.
    npm run package -w @embroider-design/app -- --publish always
    ```
 
-   That uploads three things to a **draft** GitHub release:
+   That tags `v0.2.0` and uploads three things:
 
    | File | Why it matters |
    |---|---|
-   | `Embroider Design-0.2.0-setup.exe` | the installer users download |
+   | `Embroider-Design-0.2.0-setup.exe` | the installer users download |
    | `latest.yml` | **the file the updater reads** — version, filename, SHA-512 |
    | `*.blockmap` | lets the updater download only the changed parts |
 
@@ -54,17 +54,43 @@ restart. This document is how you make a release it can find.
    reporting that they are up to date. If you ever build the installer by hand
    and attach it to a release yourself, attach `latest.yml` too.
 
-3. **Publish the release** on GitHub (it is created as a draft). The updater
-   ignores drafts and, with `releaseType: release`, prereleases as well.
+3. **Confirm it is live.** `releaseType: release` in `electron-builder.yml`
+   means the release is created already published rather than as a draft — the
+   default would be `draft`. Check it anyway, because the updater ignores drafts
+   and prereleases and the symptom is silence rather than an error:
+
+   ```powershell
+   Invoke-RestMethod 'https://api.github.com/repos/atlas-navigate/embroider-design/releases/latest'
+   ```
+
+   If it did come out as a draft, publish it from the GitHub UI or
+   `PATCH /repos/:owner/:repo/releases/:id` with `{"draft": false}`.
 
 Within 30 minutes every running copy will notice.
+
+## Never put a space in the artifact name
+
+`artifactName` in `electron-builder.yml` is deliberately the literal
+`Embroider-Design-${version}-setup.${ext}` rather than `${productName}-…`,
+because `productName` is "Embroider Design" and the space causes three
+different names for one file:
+
+- on disk, electron-builder writes `Embroider Design-0.1.0-setup.exe`
+- in `latest.yml`, it writes the sanitized `Embroider-Design-0.1.0-setup.exe`
+- if you attach that file to a release by hand, **GitHub renames it again**, to
+  `Embroider.Design-0.1.0-setup.exe`
+
+The updater fetches the name in `latest.yml`, so it 404s on every check and the
+app silently never updates. `--publish always` happens to paper over this by
+uploading under the sanitized name; the manual path does not. A space-free
+`artifactName` makes all three identical, so both paths work.
 
 ## If you would rather not use a token
 
 `npm run package` alone builds the installer into `packages/app/release/`
-without uploading anything. Attach `release/Embroider Design-<version>-setup.exe`
-**and** `release/latest.yml` to a GitHub release manually; the result is
-identical from the updater's point of view.
+without uploading anything. Attach `release/Embroider-Design-<version>-setup.exe`
+**and** `release/latest.yml` to a GitHub release manually — do not rename either
+file — and the result is identical from the updater's point of view.
 
 ## Code signing
 
