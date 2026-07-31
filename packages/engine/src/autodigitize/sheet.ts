@@ -58,6 +58,20 @@ export interface SheetScan {
   height: number;
   /** The colour treated as the page's ground. */
   background: Rgb;
+  /**
+   * The drawings ran together into one page-sized mass.
+   *
+   * Always the same cause: `backgroundTolerance` is below the page's own
+   * noise, so the ground itself counts as ink and every icon is joined to
+   * every other through it. A photograph of stitching on woven fabric does
+   * this at any tolerance tuned for clip-art on white.
+   *
+   * The result is not empty when this is set — one stray speck usually
+   * survives the size filters — which is exactly why it needs saying out loud.
+   * A caller that ignores it shows the user a single meaningless cell and no
+   * clue what to change.
+   */
+  crowded: boolean;
 }
 
 export interface SheetScanOptions {
@@ -113,6 +127,18 @@ const FRAME_SPAN = 0.9;
  */
 const MAX_CELLS = 200;
 
+/**
+ * How much of the page a rejected blob must fill, *on top of* reaching across
+ * it, before the mask counts as having run together.
+ *
+ * Both conditions are needed, and area alone is the one that misleads. A
+ * single large drawing centred on a page is easily half of it, so area would
+ * call that crowded and suppress the very fallback that exists to handle it.
+ * What a runaway mask does and a drawing does not is reach every edge *and*
+ * stay solid on the way across.
+ */
+const CROWDED_SHARE = 0.4;
+
 interface PreparedSheet {
   working: RgbaImage;
   background: Rgb;
@@ -130,28 +156,48 @@ function prepareSheet(image: RgbaImage, options: SheetScanOptions): PreparedShee
   return { working, background, ink: inkMask(working, background, options) };
 }
 
+/** How far in from each edge the ground is sampled, as a share of the page. */
+const MARGIN_BAND = 0.15;
+
 /**
- * The page's ground: the most common colour in the whole image.
+ * The page's ground: the commonest colour in a band around the margin.
  *
- * `borderColor` would be the obvious reuse, and it is the right rule for a
- * single logo — but it samples only the outermost ring of pixels, and a sheet
- * printed with a border or a coloured margin makes that ring entirely frame.
- * The ink mask would then come out inverted and every icon would vanish into
- * one page-sized blob. On a sheet of clip-art the ground is by a wide margin
- * the commonest colour, so counting all of it is both more robust and no more
- * code.
+ * Neither obvious rule survives on its own, and each fails on a page the other
+ * handles:
+ *
+ *   - `borderColor` samples the outermost *ring* of pixels. A sheet printed
+ *     with a border makes that ring entirely frame, the ink mask comes out
+ *     inverted, and every icon vanishes into one page-sized blob.
+ *   - the mode of the whole image fails the moment one drawing covers more
+ *     than half the page, because the drawing then *is* the commonest colour
+ *     and the ground becomes the ink.
+ *
+ * A band deep enough to drown a printed rule, but still all margin, is right in
+ * both cases: a two-pixel frame is a rounding error within it, and a drawing
+ * big enough to dominate the page still leaves the margin as ground.
  *
  * Bucketed to 16 levels per channel for the same reason `borderColor` does it:
  * a JPEG's white is never one value.
  */
 function pageBackground(image: RgbaImage): Rgb {
+  const insetX = Math.floor(image.width * MARGIN_BAND);
+  const insetY = Math.floor(image.height * MARGIN_BAND);
+
   const counts = new Map<number, number>();
-  for (let i = 0; i < image.width * image.height; i++) {
+  const record = (x: number, y: number): void => {
+    const i = (y * image.width + x) * 4;
     const key =
-      ((image.data[i * 4] >> 4) << 8) |
-      ((image.data[i * 4 + 1] >> 4) << 4) |
-      (image.data[i * 4 + 2] >> 4);
+      ((image.data[i] >> 4) << 8) | ((image.data[i + 1] >> 4) << 4) | (image.data[i + 2] >> 4);
     counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+
+  for (let y = 0; y < image.height; y++) {
+    const throughout = y < insetY || y >= image.height - insetY;
+    for (let x = 0; x < image.width; x++) {
+      // Every pixel of the top and bottom bands; only the left and right
+      // margins of the rows between them.
+      if (throughout || x < insetX || x >= image.width - insetX) record(x, y);
+    }
   }
 
   let bestKey = 0;
@@ -352,14 +398,17 @@ export function scanIconSheet(image: RgbaImage, options: SheetScanOptions = {}):
   const maxPixels = Math.round(total * (options.maxCellShare ?? DEFAULT_MAX_CELL_SHARE));
 
   let candidates: Candidate[] = [];
+  let crowded = false;
   for (let label = 0; label < sizes.length; label++) {
     const box = boxes[label];
     if (!box) continue;
-    if (sizes[label] < minPixels || sizes[label] > maxPixels) continue;
     const spansPage =
       box.maxX - box.minX >= working.width * FRAME_SPAN &&
       box.maxY - box.minY >= working.height * FRAME_SPAN;
-    if (spansPage) continue;
+    if (sizes[label] < minPixels || sizes[label] > maxPixels || spansPage) {
+      if (spansPage && sizes[label] > total * CROWDED_SHARE) crowded = true;
+      continue;
+    }
     candidates.push({ labels: new Set([label]), box, pixelCount: sizes[label] });
   }
 
@@ -374,10 +423,19 @@ export function scanIconSheet(image: RgbaImage, options: SheetScanOptions = {}):
   // Nothing survived, but there was ink: the page holds one drawing rather than
   // a sheet of them. Returning it as a single cell is more useful than an empty
   // result the user cannot act on.
-  if (candidates.length === 0) {
+  // ...unless the mask ran together, where the "one drawing" is the whole page
+  // of noise and handing it back would be worse than an empty result.
+  if (candidates.length === 0 && !crowded) {
     const whole = maskBounds(ink);
-    if (!whole) return { cells: [], width: working.width, height: working.height, background };
-    candidates = [{ labels: new Set(allLabelsWithin(labels, working.width, whole)), box: whole, pixelCount: countWithin(ink, whole) }];
+    if (whole) {
+      candidates = [
+        {
+          labels: new Set(allLabelsWithin(labels, working.width, whole)),
+          box: whole,
+          pixelCount: countWithin(ink, whole),
+        },
+      ];
+    }
   }
 
   const padding = options.padding ?? DEFAULT_PADDING;
@@ -394,7 +452,7 @@ export function scanIconSheet(image: RgbaImage, options: SheetScanOptions = {}):
     };
   });
 
-  return { cells, width: working.width, height: working.height, background };
+  return { cells, width: working.width, height: working.height, background, crowded };
 }
 
 /**
@@ -417,6 +475,10 @@ export function sliceSheetGrid(
   const padding = options.padding ?? DEFAULT_PADDING;
 
   const cells: SheetCell[] = [];
+  // Grid mode never labels components, so it reads the same symptom off the
+  // trimming instead: a cell whose ink reaches every edge of its cut has not
+  // been trimmed at all, and a page of those is a mask that ran together.
+  let untrimmed = 0;
   for (let row = 0; row < rowCount; row++) {
     for (let column = 0; column < columnCount; column++) {
       const cut: BoundingBox = {
@@ -427,6 +489,12 @@ export function sliceSheetGrid(
       };
       const trimmed = maskBounds(ink, cut);
       if (!trimmed) continue;
+      if (
+        trimmed.maxX - trimmed.minX >= (cut.maxX - cut.minX) * FRAME_SPAN &&
+        trimmed.maxY - trimmed.minY >= (cut.maxY - cut.minY) * FRAME_SPAN
+      ) {
+        untrimmed++;
+      }
 
       const box = padded(trimmed, padding);
       cells.push({
@@ -446,7 +514,13 @@ export function sliceSheetGrid(
     }
   }
 
-  return { cells, width: working.width, height: working.height, background };
+  return {
+    cells,
+    width: working.width,
+    height: working.height,
+    background,
+    crowded: cells.length > 0 && untrimmed > cells.length / 2,
+  };
 }
 
 /** Bounds of the set pixels, optionally restricted to a window. */

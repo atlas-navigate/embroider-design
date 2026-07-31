@@ -652,7 +652,14 @@ function SheetImport(): JSX.Element {
                 : 'Nothing found yet'}
               . Click one to leave it out.
             </p>
-            {scan && scan.cells.length === 0 && (
+            {scan?.crowded && (
+              <p className="warn small">
+                The page and the drawings are running together, so the icons cannot be told
+                apart. Raise the background tolerance until they separate — a photograph of
+                stitching on fabric usually needs it well above the default.
+              </p>
+            )}
+            {scan && scan.cells.length === 0 && !scan.crowded && (
               <p className="warn small">
                 No icons found. Try a lower background tolerance, or switch to Grid and give it
                 the rows and columns.

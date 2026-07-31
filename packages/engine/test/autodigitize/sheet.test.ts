@@ -158,16 +158,53 @@ describe('scanIconSheet', () => {
     // Half the page is well past `maxCellShare`, so every candidate is
     // rejected. Handing back nothing would be useless; handing back the
     // drawing is what the user meant.
+    //
+    // It also covers more of the page than the white does, which is what makes
+    // the ground the *margin's* commonest colour rather than the whole
+    // image's: taken over everything, the drawing would win and the page would
+    // be traced inside out.
     const image = page(200, 200);
     disc(image, 100, 100, 80);
 
     const scan = scanIconSheet(image);
+    expect(scan.background[0]).toBeGreaterThan(200);
+    expect(scan.crowded).toBe(false);
     expect(scan.cells).toHaveLength(1);
     expect(scan.cells[0].box.maxX - scan.cells[0].box.minX).toBeGreaterThan(150);
   });
 
   it('returns nothing for a blank page', () => {
-    expect(scanIconSheet(page(120, 120)).cells).toHaveLength(0);
+    const scan = scanIconSheet(page(120, 120));
+    expect(scan.cells).toHaveLength(0);
+    expect(scan.crowded).toBe(false);
+  });
+
+  it('says so when the page and the drawings run together', () => {
+    // A noisy ground — a photograph of stitching on woven fabric is the real
+    // case — welds every icon to every other through the background. What
+    // survives the size filters is a stray speck, so the count alone looks
+    // like a result rather than a failure.
+    const image = page(200, 200);
+    // A weave close enough to the ground that a tight tolerance mistakes it
+    // for drawing and a loose one does not — the whole point of the control.
+    for (let y = 0; y < 200; y++) {
+      for (let x = 0; x < 200; x++) {
+        if ((x + y) % 3 === 0) setPixel(image, x, y, [215, 218, 224]);
+      }
+    }
+    disc(image, 60, 60, 16);
+    disc(image, 140, 140, 16);
+
+    const scan = scanIconSheet(image, { backgroundTolerance: 8 });
+    expect(scan.crowded).toBe(true);
+    // And the whole-page fallback stays out of the way: handing back a cell
+    // around the noise would be worse than handing back nothing.
+    expect(scan.cells.length).toBeLessThan(2);
+
+    // Raised past the weave, the two icons come back and the warning goes.
+    const clear = scanIconSheet(image, { backgroundTolerance: 60 });
+    expect(clear.crowded).toBe(false);
+    expect(clear.cells).toHaveLength(2);
   });
 
   it('drops speckle below the minimum size', () => {
