@@ -97,6 +97,17 @@ export interface LibraryShape {
   id: string;
   name: string;
   category: CategoryId;
+  /**
+   * The user's own grouping, free text, and only meaningful when `category` is
+   * `custom`.
+   *
+   * A folder rather than a category, because `CategoryId` is a closed union
+   * that `CATEGORIES` drives — a name somebody types while importing a sheet
+   * cannot join it. Keeping the category at `custom` and hanging the name off
+   * the side is what lets a collection reuse the panel, the search and the
+   * placement code without any of them learning a second kind of grouping.
+   */
+  collection?: string;
   /** Extra search terms, so "jack o lantern" also finds the pumpkin. */
   keywords?: string[];
   /** Sewn back to front: the first part is stitched first. */

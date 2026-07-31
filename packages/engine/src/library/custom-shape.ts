@@ -111,16 +111,33 @@ function coercePart(value: unknown): LibraryPart | null {
   };
 }
 
+/**
+ * Long enough for "Autumn leaves and pumpkins", short enough that a pasted
+ * paragraph cannot turn into a chip the width of the panel.
+ */
+const MAX_COLLECTION_LENGTH = 40;
+
+export function coerceCollectionName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().slice(0, MAX_COLLECTION_LENGTH).trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function coerceShape(value: unknown): LibraryShape | null {
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
   if (!Array.isArray(record.parts)) return null;
   const parts = record.parts.map(coercePart).filter((part): part is LibraryPart => part !== null);
   if (parts.length === 0) return null;
+  const collection = coerceCollectionName(record.collection);
   return {
     id: typeof record.id === 'string' && record.id ? record.id : createCustomShapeId(),
     name: typeof record.name === 'string' && record.name.trim() ? record.name : 'My shape',
     category: 'custom',
+    // Named explicitly rather than spread, because everything this function
+    // does not name is dropped — which is exactly how `collection` used to
+    // vanish on the first restart after an import.
+    ...(collection ? { collection } : {}),
     keywords: Array.isArray(record.keywords)
       ? record.keywords.filter((keyword): keyword is string => typeof keyword === 'string')
       : ['custom'],

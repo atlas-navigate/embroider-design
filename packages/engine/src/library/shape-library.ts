@@ -37,7 +37,7 @@ export function populatedCategories(): readonly ShapeCategory[] {
 }
 
 function haystackFor(shape: LibraryShape): string {
-  return `${shape.name} ${shape.category} ${(shape.keywords ?? []).join(' ')}`.toLowerCase();
+  return `${shape.name} ${shape.category} ${shape.collection ?? ''} ${(shape.keywords ?? []).join(' ')}`.toLowerCase();
 }
 
 /** Pre-lowercased haystacks, so searching does not re-normalise on every keystroke. */
