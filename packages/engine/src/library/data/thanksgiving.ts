@@ -1,149 +1,250 @@
 import type { LibraryShape } from '../types.js';
+import { circle, ellipse, leaf } from './draw.js';
+import {
+  BROWN,
+  BROWN_DARK,
+  COPPER,
+  CREAM,
+  CREAM_DARK,
+  FUR,
+  FUR_DARK,
+  GOLD,
+  GREEN_DARK,
+  INK,
+  OLIVE,
+  ORANGE,
+  ORANGE_DARK,
+  ORANGE_LIGHT,
+  RED,
+  RED_DARK,
+  WHITE,
+  WOOD,
+  WOOD_DARK,
+  YELLOW,
+  YELLOW_DARK,
+} from './palette.js';
 
-const LEAF_RED = '#c4471f';
-const LEAF_ORANGE = '#dd8020';
-const LEAF_GOLD = '#d8a13a';
-const BARK = '#7a5230';
-const TURKEY_BROWN = '#8a5a30';
-const CREAM = '#f2e3c6';
+/**
+ * Autumn and Thanksgiving.
+ *
+ * Leaves live or die on their lobes and their stalk. A maple leaf is five
+ * lobes with deep notches between them and a stalk longer than you expect; an
+ * oak is round-lobed with shallow bays. Blur either into a rosette and you get
+ * the same anonymous autumn shape twice.
+ */
 
 export const THANKSGIVING_SHAPES: LibraryShape[] = [
   {
     id: 'autumn-maple-leaf',
     name: 'Maple leaf',
     category: 'thanksgiving',
-    keywords: ['fall', 'autumn', 'canada', 'tree', 'leaf'],
+    keywords: ['autumn', 'fall', 'red', 'canada', 'tree'],
     parts: [
       {
         name: 'Leaf',
-        d: 'M 50 0 L 58 22 L 72 16 L 68 34 L 92 28 L 82 44 L 100 48 L 84 58 L 92 72 L 70 68 L 74 88 L 56 76 L 54 100 L 46 100 L 44 76 L 26 88 L 30 68 L 8 72 L 16 58 L 0 48 L 18 44 L 8 28 L 32 34 L 28 16 L 42 22 Z',
-        color: LEAF_RED,
+        d:
+          'M 50 2 L 58 20 L 70 14 L 66 32 L 84 26 L 74 40 L 98 40 L 82 52 ' +
+          'L 96 62 L 74 66 L 82 82 L 60 74 L 56 88 L 50 78 L 44 88 L 40 74 ' +
+          'L 18 82 L 26 66 L 4 62 L 18 52 L 2 40 L 26 40 L 16 26 L 34 32 ' +
+          'L 30 14 L 42 20 Z',
+        color: RED,
       },
+      {
+        name: 'Veins',
+        d:
+          'M 47 24 L 53 24 L 53 78 L 47 78 Z ' +
+          'M 50 44 L 76 42 L 76 46 L 50 50 Z M 50 44 L 24 42 L 24 46 L 50 50 Z ' +
+          'M 50 60 L 70 64 L 69 68 L 50 65 Z M 50 60 L 30 64 L 31 68 L 50 65 Z',
+        color: RED_DARK,
+      },
+      { name: 'Stalk', d: 'M 47 76 L 53 76 L 53 98 L 47 98 Z', color: WOOD_DARK },
     ],
   },
   {
     id: 'autumn-oak-leaf',
     name: 'Oak leaf',
     category: 'thanksgiving',
-    keywords: ['fall', 'autumn', 'lobed', 'tree'],
+    keywords: ['autumn', 'fall', 'acorn', 'tree', 'lobed'],
     parts: [
       {
         name: 'Leaf',
-        d: 'M 50 2 C 58 2 62 8 60 16 C 68 12 76 16 74 26 C 84 24 90 32 84 40 C 94 42 96 52 88 58 C 96 64 92 74 82 74 C 86 84 78 92 68 88 C 68 96 60 100 54 94 L 54 100 L 46 100 L 46 94 C 40 100 32 96 32 88 C 22 92 14 84 18 74 C 8 74 4 64 12 58 C 4 52 6 42 16 40 C 10 32 16 24 26 26 C 24 16 32 12 40 16 C 38 8 42 2 50 2 Z',
-        color: LEAF_ORANGE,
+        // Round lobes and shallow bays, deliberately unlike the maple's spikes.
+        d:
+          'M 50 2 C 58 2 62 8 60 16 C 70 12 78 16 78 24 C 88 24 94 32 90 40 ' +
+          'C 98 44 98 54 90 58 C 96 66 90 76 82 74 C 82 84 72 88 66 82 ' +
+          'C 64 90 54 92 52 84 L 52 96 L 48 96 L 48 84 C 46 92 36 90 34 82 ' +
+          'C 28 88 18 84 18 74 C 10 76 4 66 10 58 C 2 54 2 44 10 40 ' +
+          'C 6 32 12 24 22 24 C 22 16 30 12 40 16 C 38 8 42 2 50 2 Z',
+        color: COPPER,
       },
+      {
+        name: 'Veins',
+        d:
+          'M 48 12 L 52 12 L 52 84 L 48 84 Z ' +
+          'M 50 28 L 72 22 L 73 26 L 50 33 Z M 50 28 L 28 22 L 27 26 L 50 33 Z ' +
+          'M 50 46 L 78 42 L 79 46 L 50 51 Z M 50 46 L 22 42 L 21 46 L 50 51 Z ' +
+          'M 50 64 L 72 62 L 72 66 L 50 69 Z M 50 64 L 28 62 L 28 66 L 50 69 Z',
+        color: BROWN_DARK,
+      },
+      { name: 'Stalk', d: 'M 47 82 L 53 82 L 53 98 L 47 98 Z', color: WOOD_DARK },
     ],
   },
   {
     id: 'autumn-acorn',
     name: 'Acorn',
     category: 'thanksgiving',
-    keywords: ['nut', 'oak', 'fall', 'squirrel'],
+    keywords: ['nut', 'oak', 'autumn', 'squirrel', 'seed'],
     parts: [
       {
         name: 'Nut',
-        d: 'M 20 38 L 80 38 C 80 68 68 94 50 94 C 32 94 20 68 20 38 Z',
-        color: '#c08a4a',
+        d: 'M 18 34 L 82 34 C 82 62 70 92 50 96 C 30 92 18 62 18 34 Z',
+        color: WOOD,
       },
+      // The nut's shaded side and the stalk are the same dark wood; keeping
+      // them together saves a thread change.
+      { name: 'Shading', d: 'M 58 34 L 82 34 C 82 62 70 92 50 96 C 62 86 68 62 68 34 Z', color: WOOD_DARK },
+      { name: 'Stalk', d: 'M 45 0 L 55 0 L 55 10 L 45 10 Z', color: WOOD_DARK },
+      { name: 'Shine', d: 'M 26 42 C 28 54 30 66 34 76 L 28 78 C 24 66 22 54 22 42 Z', color: CREAM_DARK },
       {
         name: 'Cap',
-        d: 'M 50 10 C 70 10 86 20 86 30 C 86 36 80 40 70 40 L 30 40 C 20 40 14 36 14 30 C 14 20 30 10 50 10 Z',
-        color: BARK,
+        d: 'M 50 6 C 74 6 92 16 92 26 C 92 34 74 40 50 40 C 26 40 8 34 8 26 C 8 16 26 6 50 6 Z',
+        color: BROWN_DARK,
       },
-      { name: 'Stalk', d: 'M 46 2 L 54 2 L 54 12 L 46 12 Z', color: BARK },
+      {
+        name: 'Cap texture',
+        d:
+          'M 20 20 L 80 20 L 80 24 L 20 24 Z M 14 28 L 86 28 L 86 32 L 14 32 Z ' +
+          'M 30 12 L 70 12 L 70 16 L 30 16 Z',
+        color: BROWN,
+      },
     ],
   },
   {
     id: 'autumn-turkey',
     name: 'Turkey',
     category: 'thanksgiving',
-    keywords: ['bird', 'thanksgiving', 'feast', 'gobble'],
+    keywords: ['bird', 'thanksgiving', 'feathers', 'fan', 'gobble'],
     parts: [
       {
         name: 'Tail feathers',
-        d: 'M 45.9 38.72 C 40.08 15.39 50 0 50 0 C 50 0 59.92 15.39 54.1 38.72 Z M 55.07 39.12 C 67.45 18.51 85.36 14.64 85.36 14.64 C 85.36 14.64 81.49 32.55 60.88 44.93 Z M 61.28 45.9 C 84.61 40.08 100 50 100 50 C 100 50 84.61 59.92 61.28 54.1 Z M 44.93 39.12 C 32.55 18.51 14.64 14.64 14.64 14.64 C 14.64 14.64 18.51 32.55 39.12 44.93 Z M 38.72 45.9 C 15.39 40.08 0 50 0 50 C 0 50 15.39 59.92 38.72 54.1 Z',
-        color: LEAF_ORANGE,
+        // A fan of alternating tones behind the bird — the fan is the turkey.
+        d:
+          'M 50 58 L 6 30 L 2 44 L 46 62 Z M 50 58 L 12 12 L 24 6 L 48 56 Z ' +
+          'M 50 58 L 50 2 L 62 6 L 52 56 Z M 50 58 L 88 12 L 96 22 L 54 58 Z ' +
+          'M 50 58 L 98 40 L 98 54 L 54 64 Z',
+        color: ORANGE_DARK,
+      },
+      {
+        name: 'Inner feathers',
+        d:
+          'M 50 58 L 20 34 L 14 44 L 46 62 Z M 50 58 L 28 18 L 38 12 L 48 56 Z ' +
+          'M 50 58 L 62 12 L 72 20 L 54 58 Z M 50 58 L 86 36 L 88 48 L 54 64 Z',
+        color: ORANGE_LIGHT,
       },
       {
         name: 'Body',
-        d: 'M 50 40 C 64 40 74 54 74 72 C 74 88 64 98 50 98 C 36 98 26 88 26 72 C 26 54 36 40 50 40 Z',
-        color: TURKEY_BROWN,
+        d: 'M 50 46 C 66 46 78 60 78 76 C 78 90 66 98 50 98 C 34 98 22 90 22 76 C 22 60 34 46 50 46 Z',
+        color: FUR_DARK,
       },
-      {
-        name: 'Head',
-        d: 'M 50 26 C 58 26 64 33 64 42 C 64 51 58 56 50 56 C 42 56 36 51 36 42 C 36 33 42 26 50 26 Z',
-        color: '#a5703f',
-      },
-      {
-        name: 'Beak and wattle',
-        d: 'M 50 42 L 62 48 L 50 52 Z M 54 52 C 60 54 62 60 58 66 C 54 70 48 68 48 62 Z',
-        color: '#c4471f',
-      },
+      { name: 'Wing', d: 'M 30 62 C 38 60 44 66 44 76 C 44 86 38 92 30 90 C 24 88 22 80 22 74 C 22 68 25 63 30 62 Z', color: BROWN_DARK },
+      { name: 'Head', d: `${ellipse(50, 44, 14, 15)} ${circle(44, 40, 3)} ${circle(56, 40, 3)}`, color: FUR },
+      { name: 'Eyes', d: `${circle(44, 40, 3)} ${circle(56, 40, 3)}`, color: INK },
+      { name: 'Beak', d: 'M 50 46 L 58 50 L 50 54 L 45 50 Z', color: YELLOW },
+      { name: 'Wattle', d: 'M 47 50 C 51 50 53 54 53 60 C 53 66 50 70 47 70 C 44 70 42 66 42 60 C 42 54 44 50 47 50 Z', color: RED },
+      { name: 'Feet', d: 'M 40 94 L 46 94 L 44 100 L 34 100 Z M 60 94 L 54 94 L 56 100 L 66 100 Z', color: YELLOW_DARK },
     ],
   },
   {
     id: 'autumn-pumpkin-pie',
     name: 'Pumpkin pie',
     category: 'thanksgiving',
-    keywords: ['dessert', 'slice', 'thanksgiving', 'food'],
+    keywords: ['dessert', 'slice', 'thanksgiving', 'baking', 'cream'],
     parts: [
-      { name: 'Crust', d: 'M 4 82 L 96 82 L 88 96 L 12 96 Z', color: '#d2a86a' },
-      { name: 'Filling', d: 'M 50 10 L 96 82 L 4 82 Z', color: '#c07a2e' },
       {
-        name: 'Cream',
-        d: 'M 50 40 C 58 40 64 46 64 54 C 64 62 58 68 50 68 C 42 68 36 62 36 54 C 36 46 42 40 50 40 Z',
-        color: CREAM,
+        name: 'Crust',
+        // A wedge seen from the side: crust wall along the back edge, filling
+        // sloping to the point. A flat triangle is a slice of nothing.
+        d: 'M 50 12 L 96 78 C 98 82 96 86 90 86 L 10 86 C 4 86 2 82 4 78 Z',
+        color: WOOD,
       },
+      {
+        name: 'Filling',
+        d: 'M 50 24 L 88 78 L 12 78 Z',
+        color: ORANGE_DARK,
+      },
+      { name: 'Filling shine', d: 'M 50 32 L 66 56 L 34 56 Z', color: ORANGE },
+      {
+        name: 'Crust edge',
+        d:
+          'M 4 78 L 96 78 C 98 82 96 86 90 86 L 10 86 C 4 86 2 82 4 78 Z ' +
+          'M 18 80 L 26 80 L 26 86 L 18 86 Z M 38 80 L 46 80 L 46 86 L 38 86 Z ' +
+          'M 58 80 L 66 80 L 66 86 L 58 86 Z M 78 80 L 86 80 L 86 86 L 78 86 Z',
+        color: WOOD_DARK,
+      },
+      { name: 'Cream', d: `${circle(50, 40, 12)} ${circle(50, 28, 8)} ${circle(50, 18, 5)}`, color: WHITE },
+      { name: 'Plate', d: 'M 2 86 L 98 86 L 94 96 C 93 98 91 98 88 98 L 12 98 C 9 98 7 98 6 96 Z', color: CREAM },
     ],
   },
   {
     id: 'autumn-cornucopia',
     name: 'Cornucopia',
     category: 'thanksgiving',
-    keywords: ['horn of plenty', 'harvest', 'basket', 'feast'],
+    keywords: ['horn of plenty', 'harvest', 'basket', 'abundance', 'thanksgiving'],
     parts: [
       {
         name: 'Horn',
-        d: 'M 54 34 C 36 34 20 46 14 62 C 8 78 14 92 26 96 C 32 98 38 96 40 90 C 34 88 30 82 32 74 C 36 60 48 52 62 52 Z',
-        color: '#b9884a',
-      },
-      {
-        name: 'Fruit',
+        // Tapering and curled at the tip — a straight cone is a megaphone.
         d:
-          'M 62 34 C 76 34 88 42 92 54 C 82 62 68 62 58 54 C 54 46 56 38 62 34 Z ' +
-          'M 74 60 C 84 60 92 66 94 76 C 84 82 72 80 66 72 C 64 66 68 60 74 60 Z ' +
-          'M 52 62 C 60 62 66 68 66 76 C 58 82 48 80 44 72 C 44 66 48 62 52 62 Z',
-        color: LEAF_RED,
+          'M 34 34 C 20 40 8 54 4 70 C 2 82 8 92 18 92 C 26 92 32 86 32 78 ' +
+          'C 32 72 28 68 22 68 C 18 68 16 70 15 74 C 16 66 22 58 32 52 ' +
+          'C 40 46 48 42 56 40 L 52 76 C 52 84 60 90 72 90 L 96 90 ' +
+          'C 90 78 84 60 80 44 C 76 30 66 24 54 24 C 46 24 38 28 34 34 Z',
+        color: WOOD,
       },
       {
-        name: 'Leaves',
-        d: 'M 66 30 C 74 20 88 18 96 26 C 90 36 76 38 68 34 Z',
-        color: '#5a8f4a',
+        name: 'Weave',
+        d:
+          'M 30 54 L 40 46 L 44 52 L 34 60 Z M 22 66 L 30 58 L 34 64 L 26 72 Z ' +
+          'M 14 76 L 22 70 L 26 76 L 18 82 Z',
+        color: WOOD_DARK,
       },
+      { name: 'Grapes', d: `${circle(74, 62, 8)} ${circle(86, 66, 8)} ${circle(80, 78, 8)} ${circle(66, 74, 8)}`, color: BROWN_DARK },
+      { name: 'Apple', d: circle(62, 52, 13), color: RED },
+      { name: 'Apple shine', d: circle(57, 47, 3.5), color: RED_DARK },
+      { name: 'Corn', d: 'M 84 28 C 92 28 98 36 98 48 C 98 58 92 64 84 64 C 76 64 72 58 72 48 C 72 36 76 28 84 28 Z', color: YELLOW },
+      { name: 'Corn kernels', d: 'M 76 36 L 92 36 L 92 40 L 76 40 Z M 74 46 L 94 46 L 94 50 L 74 50 Z M 76 56 L 92 56 L 92 60 L 76 60 Z', color: YELLOW_DARK },
+      { name: 'Leaves', d: `${leaf(46, 12, 18, 26)} ${leaf(66, 8, 16, 24)}`, color: GREEN_DARK },
     ],
   },
   {
     id: 'autumn-wheat',
     name: 'Wheat',
     category: 'thanksgiving',
-    keywords: ['grain', 'harvest', 'stalk', 'barley'],
+    keywords: ['harvest', 'grain', 'sheaf', 'field', 'autumn'],
     parts: [
-      {
-        name: 'Stalk',
-        d: 'M 47 40 L 53 40 L 53 100 L 47 100 Z',
-        color: LEAF_GOLD,
-      },
+      // Stalk and leaves are the same olive and sew together, under the ear.
+      { name: 'Stalk', d: 'M 47 40 L 53 40 L 53 98 L 47 98 Z', color: OLIVE },
+      { name: 'Leaves', d: 'M 46 64 C 34 62 24 70 20 84 C 34 84 44 76 48 68 Z M 54 76 C 66 74 76 82 80 94 C 66 94 56 88 52 80 Z', color: OLIVE },
       {
         name: 'Grains',
+        // Paired, alternating up the stalk and tilted outward, the way an ear
+        // of wheat actually sits.
         d:
-          'M 50 2 C 56 8 56 18 50 24 C 44 18 44 8 50 2 Z ' +
-          'M 38 18 C 46 20 50 28 46 36 C 38 34 34 26 38 18 Z ' +
-          'M 62 18 C 66 26 62 34 54 36 C 50 28 54 20 62 18 Z ' +
-          'M 34 36 C 42 38 46 46 42 54 C 34 52 30 44 34 36 Z ' +
-          'M 66 36 C 70 44 66 52 58 54 C 54 46 58 38 66 36 Z ' +
-          'M 32 56 C 40 58 44 66 40 74 C 32 72 28 64 32 56 Z ' +
-          'M 68 56 C 72 64 68 72 60 74 C 56 66 60 58 68 56 Z',
-        color: LEAF_GOLD,
+          'M 50 2 C 55 8 55 18 50 24 C 45 18 45 8 50 2 Z ' +
+          'M 38 14 C 46 16 51 24 50 32 C 42 30 37 22 38 14 Z ' +
+          'M 62 14 C 54 16 49 24 50 32 C 58 30 63 22 62 14 Z ' +
+          'M 36 28 C 44 30 49 38 48 46 C 40 44 35 36 36 28 Z ' +
+          'M 64 28 C 56 30 51 38 52 46 C 60 44 65 36 64 28 Z ' +
+          'M 34 42 C 42 44 47 52 46 60 C 38 58 33 50 34 42 Z ' +
+          'M 66 42 C 58 44 53 52 54 60 C 62 58 67 50 66 42 Z',
+        color: GOLD,
+      },
+      {
+        name: 'Awns',
+        d:
+          'M 20 20 L 24 18 L 40 44 L 36 46 Z M 80 20 L 76 18 L 60 44 L 64 46 Z ' +
+          'M 14 40 L 18 38 L 36 62 L 32 64 L 14 40 Z M 86 40 L 82 38 L 64 62 L 68 64 Z',
+        color: YELLOW_DARK,
       },
     ],
   },

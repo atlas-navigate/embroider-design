@@ -1,4 +1,29 @@
 import type { LibraryShape } from '../types.js';
+import { circle, ellipse, ring, star } from './draw.js';
+import {
+  BROWN,
+  BROWN_DARK,
+  CREAM,
+  GOLD,
+  GOLD_DARK,
+  GOLD_LIGHT,
+  INK,
+  INK_SOFT,
+  ORANGE,
+  PINE,
+  PINE_DARK,
+  PINE_LIGHT,
+  RED,
+  RED_DARK,
+  RED_LIGHT,
+  SILVER_LIGHT,
+  SKY,
+  SKY_LIGHT,
+  WHITE,
+  WOOD,
+  WOOD_DARK,
+  WOOD_LIGHT,
+} from './palette.js';
 
 /**
  * Christmas.
@@ -12,125 +37,173 @@ import type { LibraryShape } from '../types.js';
  * obvious way — three crossing bars — the centre would be three overlapping
  * regions and the machine would stitch it three times.
  */
-const SNOW_WHITE = '#f4f7fa';
-const SNOW_SHADOW = '#cdd9e5';
-const TREE_GREEN = '#2f7d4f';
-const TRUNK_BROWN = '#6b4423';
-const HOLLY_RED = '#c0392b';
-const GOLD = '#d8a13a';
-const COAL = '#2b2b30';
-const CARROT = '#e2761b';
 
-const SNOWMAN_FACE =
-  'M 44 29 C 45.66 29 47 30.34 47 32 C 47 33.66 45.66 35 44 35 C 42.34 35 41 33.66 41 32 C 41 30.34 42.34 29 44 29 Z ' +
-  'M 56 29 C 57.66 29 59 30.34 59 32 C 59 33.66 57.66 35 56 35 C 54.34 35 53 33.66 53 32 C 53 30.34 54.34 29 56 29 Z';
+const SNOWMAN_FACE = `${circle(43, 30, 3)} ${circle(57, 30, 3)}`;
 
-const SNOWMAN_BUTTONS =
-  'M 50 55 C 51.93 55 53.5 56.57 53.5 58.5 C 53.5 60.43 51.93 62 50 62 C 48.07 62 46.5 60.43 46.5 58.5 C 46.5 56.57 48.07 55 50 55 Z ' +
-  'M 50 68 C 51.93 68 53.5 69.57 53.5 71.5 C 53.5 73.43 51.93 75 50 75 C 48.07 75 46.5 73.43 46.5 71.5 C 46.5 69.57 48.07 68 50 68 Z ' +
-  'M 50 81 C 51.93 81 53.5 82.57 53.5 84.5 C 53.5 86.43 51.93 88 50 88 C 48.07 88 46.5 86.43 46.5 84.5 C 46.5 82.57 48.07 81 50 81 Z';
+const SNOWMAN_MOUTH =
+  `${circle(43, 40, 1.8)} ${circle(47, 42, 1.8)} ${circle(53, 42, 1.8)} ${circle(57, 40, 1.8)}`;
+
+const SNOWMAN_BUTTONS = `${circle(50, 60, 3.5)} ${circle(50, 72, 3.5)} ${circle(50, 84, 3.5)}`;
 
 export const CHRISTMAS_SHAPES: LibraryShape[] = [
   {
     id: 'christmas-tree',
     name: 'Christmas tree',
     category: 'christmas',
-    keywords: ['fir', 'pine', 'evergreen', 'xmas'],
+    keywords: ['fir', 'pine', 'spruce', 'evergreen', 'decorated'],
     parts: [
       {
-        name: 'Tree',
-        d: 'M 50 2 L 72 34 L 60 34 L 78 62 L 64 62 L 86 92 L 14 92 L 36 62 L 22 62 L 40 34 L 28 34 Z',
-        color: TREE_GREEN,
+        name: 'Foliage',
+        // Boughs that sag and come to points, rather than three flat triangles.
+        // A fir droops, and the droop is most of what makes it a fir.
+        d:
+          'M 50 2 C 56 10 62 20 68 28 L 60 27 C 66 38 74 50 82 60 L 72 58 ' +
+          'C 80 68 88 78 96 86 L 4 86 C 12 78 20 68 28 58 L 18 60 ' +
+          'C 26 50 34 38 40 27 L 32 28 C 38 20 44 10 50 2 Z',
+        color: PINE,
       },
-      { name: 'Trunk', d: 'M 42 92 L 58 92 L 58 100 L 42 100 Z', color: TRUNK_BROWN },
+      {
+        name: 'Shadow',
+        // The underside of each bough, not the whole right half — a tree lit
+        // from one side still has needles on both.
+        d:
+          'M 32 28 L 68 28 L 64 33 L 36 33 Z ' +
+          'M 18 60 L 82 60 L 78 65 L 22 65 Z ' +
+          'M 4 86 L 96 86 L 96 88 L 4 88 Z',
+        color: PINE_DARK,
+      },
+      {
+        name: 'Highlight',
+        d: 'M 50 12 L 44 24 L 40 27 C 44 18 47 12 50 6 Z M 42 40 L 34 54 L 28 58 C 34 48 38 42 42 34 Z',
+        color: PINE_LIGHT,
+      },
+      { name: 'Trunk', d: 'M 42 86 L 58 86 L 58 98 L 42 98 Z', color: WOOD_DARK },
+      {
+        name: 'Baubles',
+        d: `${circle(38, 44, 4)} ${circle(62, 52, 4)} ${circle(50, 68, 4)} ${circle(28, 74, 4)} ${circle(72, 76, 4)}`,
+        color: RED,
+      },
+      { name: 'Star', d: star(50, 13, 11, 4.5, 5), color: GOLD },
     ],
   },
   {
     id: 'christmas-snowman',
     name: 'Snowman',
     category: 'christmas',
-    keywords: ['snow', 'winter', 'frosty', 'carrot'],
+    keywords: ['snow', 'winter', 'frosty', 'carrot', 'hat', 'scarf'],
     parts: [
+      // Ordered so each thread sews in one unbroken run — the black of the hat,
+      // the eyes and the buttons is one pass, not three. Otherwise a snowman
+      // stops the machine to rethread the same spool twice over.
+      { name: 'Base', d: ellipse(50, 76, 30, 22), color: WHITE },
+      { name: 'Middle', d: ellipse(50, 54, 23, 18), color: WHITE },
+      { name: 'Head', d: `${circle(50, 34, 17)} ${SNOWMAN_FACE} ${SNOWMAN_MOUTH}`, color: WHITE },
       {
-        name: 'Body',
+        name: 'Shading',
+        // A snowman on a white ground is invisible without it, and white thread
+        // on white fabric needs the shadow more still.
         d:
-          'M 50 18 C 58 18 64 24 64 32 C 64 36 63 39 61 42 C 70 45 76 51 76 58 C 76 62 74 66 71 69 ' +
-          'C 82 73 90 80 90 88 C 90 96 72 100 50 100 C 28 100 10 96 10 88 C 10 80 18 73 29 69 ' +
-          'C 26 66 24 62 24 58 C 24 51 30 45 39 42 C 37 39 36 36 36 32 C 36 24 42 18 50 18 Z ' +
-          SNOWMAN_FACE +
-          ' ' +
-          SNOWMAN_BUTTONS,
-        color: SNOW_WHITE,
+          'M 66 24 C 76 30 78 44 68 48 C 74 42 72 32 62 27 Z ' +
+          'M 70 42 C 76 48 76 62 66 68 C 74 60 74 50 66 44 Z ' +
+          'M 74 62 C 82 70 82 86 68 94 C 78 84 78 72 70 64 Z',
+        color: SILVER_LIGHT,
       },
       {
         name: 'Arms',
         d:
-          'M 24 54 L 5 44 L 3 48 L 23 58 Z M 12 47 L 4 40 L 2 43 L 10 50 Z ' +
-          'M 76 54 L 95 44 L 97 48 L 77 58 Z M 88 47 L 96 40 L 98 43 L 90 50 Z',
-        color: TRUNK_BROWN,
+          'M 26 52 L 6 42 L 4 46 L 24 57 Z M 10 44 L 2 36 L 0 40 L 8 47 Z ' +
+          'M 74 52 L 94 42 L 96 46 L 76 57 Z M 90 44 L 98 36 L 100 40 L 92 47 Z',
+        color: BROWN,
       },
-      { name: 'Hat brim', d: 'M 26 15 L 74 15 L 74 22 L 26 22 Z', color: COAL },
-      { name: 'Hat crown', d: 'M 36 1 L 64 1 L 64 15 L 36 15 Z', color: COAL },
-      { name: 'Eyes', d: SNOWMAN_FACE, color: COAL },
-      { name: 'Buttons', d: SNOWMAN_BUTTONS, color: COAL },
-      { name: 'Nose', d: 'M 50 33 L 64 36 L 50 39 Z', color: CARROT },
+      { name: 'Hat crown', d: 'M 34 2 L 66 2 L 66 20 L 34 20 Z', color: INK },
+      { name: 'Hat brim', d: 'M 26 20 L 74 20 L 74 26 L 26 26 Z', color: INK },
+      { name: 'Face', d: `${SNOWMAN_FACE} ${SNOWMAN_MOUTH}`, color: INK },
+      { name: 'Buttons', d: SNOWMAN_BUTTONS, color: INK },
+      { name: 'Hat band', d: 'M 34 14 L 66 14 L 66 21 L 34 21 Z', color: RED },
+      {
+        name: 'Scarf',
+        d:
+          'M 30 46 C 40 52 60 52 70 46 L 72 56 C 60 62 40 62 28 56 Z ' +
+          'M 66 54 L 78 52 L 82 74 L 70 76 Z',
+        color: RED,
+      },
+      { name: 'Nose', d: 'M 50 34 L 72 38 L 50 41 Z', color: ORANGE },
     ],
   },
   {
     id: 'christmas-snowflake',
     name: 'Snowflake',
     category: 'christmas',
-    keywords: ['snow', 'winter', 'frost', 'ice'],
+    keywords: ['snow', 'ice', 'winter', 'crystal', 'frost'],
     parts: [
       {
-        name: 'Snowflake',
-        d: 'M 48.59 41.11 L 46.39 4.14 L 50 0 L 53.61 4.14 L 51.41 41.11 L 53.69 43.61 L 56.99 44.34 L 87.91 23.95 L 93.3 25 L 91.52 30.2 L 58.4 46.77 L 57.38 50 L 58.4 53.23 L 91.52 69.8 L 93.3 75 L 87.91 76.05 L 56.99 55.66 L 53.69 56.39 L 51.41 58.89 L 53.61 95.86 L 50 100 L 46.39 95.86 L 48.59 58.89 L 46.31 56.39 L 43.01 55.66 L 12.09 76.05 L 6.7 75 L 8.48 69.8 L 41.6 53.23 L 42.62 50 L 41.6 46.77 L 8.48 30.2 L 6.7 25 L 12.09 23.95 L 43.01 44.34 L 46.31 43.61 Z',
-        color: SNOW_SHADOW,
+        name: 'Crystal',
+        d:
+          'M 46 4 L 54 4 L 54 30 L 76 17 L 80 24 L 58 37 L 58 43 L 80 30 L 84 37 L 62 50 ' +
+          'L 84 63 L 80 70 L 58 57 L 58 63 L 80 76 L 76 83 L 54 70 L 54 96 L 46 96 L 46 70 ' +
+          'L 24 83 L 20 76 L 42 63 L 42 57 L 20 70 L 16 63 L 38 50 ' +
+          'L 16 37 L 20 30 L 42 43 L 42 37 L 20 24 L 24 17 L 46 30 Z',
+        color: SKY,
       },
+      { name: 'Hub', d: circle(50, 50, 8), color: WHITE },
     ],
   },
   {
     id: 'christmas-snowflake-branched',
     name: 'Branched snowflake',
     category: 'christmas',
-    keywords: ['snow', 'winter', 'frost', 'crystal'],
+    keywords: ['snow', 'ice', 'winter', 'crystal', 'six', 'dendrite'],
     parts: [
       {
-        name: 'Snowflake',
-        d: 'M 49.03 42.06 L 47.32 28.16 L 37.26 18.48 L 47.95 22.08 L 47.19 4.09 L 50 0 L 52.81 4.09 L 52.05 22.08 L 62.74 18.48 L 52.68 28.16 L 50.97 42.06 L 53.28 44.32 L 56.39 45.19 L 67.57 36.76 L 70.93 23.21 L 73.16 34.26 L 88.36 24.61 L 93.3 25 L 91.17 29.47 L 75.21 37.81 L 83.67 45.27 L 70.25 41.4 L 57.36 46.87 L 56.56 50 L 57.36 53.13 L 70.25 58.6 L 83.67 54.73 L 75.21 62.19 L 91.17 70.53 L 93.3 75 L 88.36 75.39 L 73.16 65.74 L 70.93 76.79 L 67.57 63.24 L 56.39 54.81 L 53.28 55.68 L 50.97 57.94 L 52.68 71.84 L 62.74 81.52 L 52.05 77.92 L 52.81 95.91 L 50 100 L 47.19 95.91 L 47.95 77.92 L 37.26 81.52 L 47.32 71.84 L 49.03 57.94 L 46.72 55.68 L 43.61 54.81 L 32.43 63.24 L 29.07 76.79 L 26.84 65.74 L 11.64 75.39 L 6.7 75 L 8.83 70.53 L 24.79 62.19 L 16.33 54.73 L 29.75 58.6 L 42.64 53.13 L 43.44 50 L 42.64 46.87 L 29.75 41.4 L 16.33 45.27 L 24.79 37.81 L 8.83 29.47 L 6.7 25 L 11.64 24.61 L 26.84 34.26 L 29.07 23.21 L 32.43 36.76 L 43.61 45.19 L 46.72 44.32 Z',
-        color: SNOW_SHADOW,
+        name: 'Crystal',
+        // Six arms, each with a pair of side branches at the same two heights.
+        // The regularity is the point: a real dendrite is symmetric, and an
+        // irregular one just looks like a mistake.
+        d:
+          'M 45 2 L 55 2 L 55 98 L 45 98 Z ' +
+          'M 8 21 L 13 12 L 92 79 L 87 88 Z ' +
+          'M 92 21 L 87 12 L 8 79 L 13 88 Z ' +
+          'M 50 10 L 68 22 L 63 29 L 50 20 L 37 29 L 32 22 Z ' +
+          'M 50 90 L 68 78 L 63 71 L 50 80 L 37 71 L 32 78 Z ' +
+          'M 14 26 L 35 28 L 34 37 L 21 36 L 22 48 L 13 47 Z ' +
+          'M 86 74 L 65 72 L 66 63 L 79 64 L 78 52 L 87 53 Z ' +
+          'M 86 26 L 65 28 L 66 37 L 79 36 L 78 48 L 87 47 Z ' +
+          'M 14 74 L 35 72 L 34 63 L 21 64 L 22 52 L 13 53 Z',
+        color: SKY,
       },
+      { name: 'Hub', d: circle(50, 50, 10), color: WHITE },
     ],
   },
   {
     id: 'christmas-snowflake-fine',
     name: 'Fine snowflake',
     category: 'christmas',
-    keywords: ['snow', 'winter', 'eight', 'star'],
+    keywords: ['snow', 'ice', 'winter', 'crystal', 'delicate', 'star'],
     parts: [
-      {
-        name: 'Snowflake',
-        d: 'M 49.16 42.04 L 47.49 26.13 L 40.35 18.44 L 48.12 20.06 L 47.59 4.06 L 50 0 L 52.41 4.06 L 51.88 20.06 L 59.65 18.44 L 52.51 26.13 L 50.84 42.04 L 52.51 43.94 L 55.03 43.78 L 65.1 31.35 L 65.49 20.86 L 69.84 27.5 L 80.78 15.82 L 85.36 14.64 L 84.18 19.22 L 72.5 30.16 L 79.14 34.51 L 68.65 34.9 L 56.22 44.97 L 56.06 47.49 L 57.96 49.16 L 73.87 47.49 L 81.56 40.35 L 79.94 48.12 L 95.94 47.59 L 100 50 L 95.94 52.41 L 79.94 51.88 L 81.56 59.65 L 73.87 52.51 L 57.96 50.84 L 56.06 52.51 L 56.22 55.03 L 68.65 65.1 L 79.14 65.49 L 72.5 69.84 L 84.18 80.78 L 85.36 85.36 L 80.78 84.18 L 69.84 72.5 L 65.49 79.14 L 65.1 68.65 L 55.03 56.22 L 52.51 56.06 L 50.84 57.96 L 52.51 73.87 L 59.65 81.56 L 51.88 79.94 L 52.41 95.94 L 50 100 L 47.59 95.94 L 48.12 79.94 L 40.35 81.56 L 47.49 73.87 L 49.16 57.96 L 47.49 56.06 L 44.97 56.22 L 34.9 68.65 L 34.51 79.14 L 30.16 72.5 L 19.22 84.18 L 14.64 85.36 L 15.82 80.78 L 27.5 69.84 L 20.86 65.49 L 31.35 65.1 L 43.78 55.03 L 43.94 52.51 L 42.04 50.84 L 26.13 52.51 L 18.44 59.65 L 20.06 51.88 L 4.06 52.41 L 0 50 L 4.06 47.59 L 20.06 48.12 L 18.44 40.35 L 26.13 47.49 L 42.04 49.16 L 43.94 47.49 L 43.78 44.97 L 31.35 34.9 L 20.86 34.51 L 27.5 30.16 L 15.82 19.22 L 14.64 14.64 L 19.22 15.82 L 30.16 27.5 L 34.51 20.86 L 34.9 31.35 L 44.97 43.78 L 47.49 43.94 Z',
-        color: SNOW_SHADOW,
-      },
+      { name: 'Crystal', d: star(50, 50, 48, 12, 6), color: SKY },
+      { name: 'Inner star', d: star(50, 50, 26, 8, 6, Math.PI / 6), color: WHITE },
+      { name: 'Hub', d: circle(50, 50, 7), color: SKY_LIGHT },
     ],
   },
   {
     id: 'christmas-ornament',
     name: 'Ornament',
     category: 'christmas',
-    keywords: ['bauble', 'ball', 'decoration', 'tree'],
+    keywords: ['bauble', 'ball', 'tree', 'decoration', 'hanging'],
     parts: [
+      { name: 'Hook', d: 'M 46 2 C 54 2 58 6 58 12 L 52 12 C 52 9 50 8 46 8 Z', color: GOLD_DARK },
+      { name: 'Cap', d: 'M 40 12 L 60 12 L 58 24 L 42 24 Z', color: GOLD },
+      { name: 'Ball', d: circle(50, 60, 38), color: RED },
       {
-        name: 'Ball',
-        d: 'M 50 26 C 68.78 26 84 41.22 84 60 C 84 78.78 68.78 94 50 94 C 31.22 94 16 78.78 16 60 C 16 41.22 31.22 26 50 26 Z',
-        color: HOLLY_RED,
+        name: 'Shading',
+        d: 'M 68 32 C 82 44 84 68 72 82 C 66 88 58 92 50 94 C 68 88 78 68 74 50 C 72 42 70 36 66 30 Z',
+        color: RED_DARK,
       },
-      { name: 'Cap', d: 'M 42 14 L 58 14 L 58 28 L 42 28 Z', color: GOLD },
+      { name: 'Shine', d: 'M 28 42 C 32 34 40 30 46 32 L 42 42 C 38 42 34 46 33 50 Z', color: RED_LIGHT },
       {
-        name: 'Hanger',
-        d: 'M 43 14 C 43 5 57 5 57 14 L 52 14 C 52 10 48 10 48 14 Z',
-        color: GOLD,
+        name: 'Band',
+        d: 'M 13 52 C 22 46 34 50 50 50 C 66 50 78 46 87 52 L 87 62 C 78 56 66 60 50 60 C 34 60 22 56 13 62 Z',
+        color: GOLD_LIGHT,
       },
     ],
   },
@@ -138,18 +211,27 @@ export const CHRISTMAS_SHAPES: LibraryShape[] = [
     id: 'christmas-candy-cane',
     name: 'Candy cane',
     category: 'christmas',
-    keywords: ['sweet', 'peppermint', 'stripe', 'treat'],
+    keywords: ['peppermint', 'sweet', 'stripe', 'treat', 'hook'],
     parts: [
       {
         name: 'Cane',
         d:
-          'M 34 100 L 34 34 C 34 16 48 4 66 4 C 84 4 98 16 98 34 L 78 34 C 78 26 73 22 66 22 C 59 22 54 26 54 34 L 54 100 Z ' +
-          // Stripes are cut out, not laid on: the fabric shows through, which is
-          // what a white stripe on a red cane actually is.
-          'M 34 50 L 54 42 L 54 52 L 34 60 Z ' +
-          'M 34 70 L 54 62 L 54 72 L 34 80 Z ' +
-          'M 34 90 L 54 82 L 54 92 L 34 98 Z',
-        color: HOLLY_RED,
+          'M 34 98 L 34 34 C 34 16 46 4 62 4 C 78 4 90 16 90 34 L 90 44 L 72 44 ' +
+          'L 72 34 C 72 28 68 22 62 22 C 56 22 52 28 52 34 L 52 98 Z',
+        color: WHITE,
+      },
+      {
+        name: 'Stripes',
+        // Angled, not horizontal: a candy cane's stripes wrap the stick, and
+        // the angle is what says "wrapped" rather than "ringed".
+        d:
+          'M 34 88 L 46 76 L 52 76 L 52 90 L 40 98 L 34 98 Z ' +
+          'M 34 62 L 52 44 L 52 58 L 34 76 Z ' +
+          'M 34 36 L 52 22 L 52 32 L 34 50 Z ' +
+          'M 46 14 L 60 4 L 68 6 L 52 22 Z ' +
+          'M 76 10 L 88 22 L 90 34 L 76 24 Z ' +
+          'M 90 40 L 90 44 L 72 44 L 72 36 Z',
+        color: RED,
       },
     ],
   },
@@ -157,22 +239,31 @@ export const CHRISTMAS_SHAPES: LibraryShape[] = [
     id: 'christmas-holly',
     name: 'Holly',
     category: 'christmas',
-    keywords: ['leaves', 'berries', 'sprig', 'mistletoe'],
+    keywords: ['leaves', 'berries', 'sprig', 'wreath', 'green'],
     parts: [
       {
         name: 'Leaves',
+        // The spines are the whole identity of a holly leaf: a smooth-edged
+        // one is a laurel. Drawn large, so those spines survive being sewn.
         d:
-          'M 48 54 C 30 52 18 42 12 28 C 22 30 28 26 30 20 C 34 28 40 30 46 28 C 44 36 46 46 48 54 Z ' +
-          'M 52 54 C 70 52 82 42 88 28 C 78 30 72 26 70 20 C 66 28 60 30 54 28 C 56 36 54 46 52 54 Z',
-        color: TREE_GREEN,
+          'M 50 46 C 38 38 22 42 10 32 C 20 28 24 20 20 8 C 30 15 38 11 46 2 ' +
+          'C 50 12 58 15 68 12 C 60 22 60 34 68 42 C 58 42 54 44 50 46 Z ' +
+          'M 46 52 C 32 52 22 64 8 64 C 14 72 14 82 8 90 C 20 87 30 92 36 98 ' +
+          'C 39 89 45 84 54 84 C 47 75 47 63 54 57 C 51 54 48 52 46 52 Z ' +
+          'M 56 52 C 70 52 80 64 94 64 C 88 72 88 82 94 90 C 82 87 72 92 66 98 ' +
+          'C 63 89 57 84 48 84 C 55 75 55 63 48 57 C 51 54 54 52 56 52 Z',
+        color: PINE,
       },
       {
-        name: 'Berries',
-        d:
-          'M 40 60 C 45.52 60 50 64.48 50 70 C 50 75.52 45.52 80 40 80 C 34.48 80 30 75.52 30 70 C 30 64.48 34.48 60 40 60 Z ' +
-          'M 62 62 C 67.52 62 72 66.48 72 72 C 72 77.52 67.52 82 62 82 C 56.48 82 52 77.52 52 72 C 52 66.48 56.48 62 62 62 Z ' +
-          'M 50 82 C 55.52 82 60 86.48 60 92 C 60 97.52 55.52 100 50 100 C 44.48 100 40 97.52 40 92 C 40 86.48 44.48 82 50 82 Z',
-        color: HOLLY_RED,
+        name: 'Veins',
+        d: 'M 45 8 L 49 8 L 49 44 L 45 44 Z M 34 60 L 38 60 L 36 94 L 32 94 Z M 66 60 L 70 60 L 68 94 L 64 94 Z',
+        color: PINE_DARK,
+      },
+      { name: 'Berries', d: `${circle(38, 40, 11)} ${circle(60, 44, 11)} ${circle(48, 58, 11)}`, color: RED },
+      {
+        name: 'Berry shine',
+        d: `${circle(34, 36, 3.5)} ${circle(56, 40, 3.5)} ${circle(44, 54, 3.5)}`,
+        color: RED_LIGHT,
       },
     ],
   },
@@ -180,26 +271,34 @@ export const CHRISTMAS_SHAPES: LibraryShape[] = [
     id: 'christmas-gift',
     name: 'Gift',
     category: 'christmas',
-    keywords: ['present', 'box', 'ribbon', 'bow', 'birthday'],
+    keywords: ['present', 'box', 'ribbon', 'bow', 'wrapped'],
     parts: [
       {
         name: 'Box',
+        // Four panels around the ribbon channel; see the note at the top of
+        // the file for why the ribbon is not laid on top.
         d:
-          'M 6 34 L 44 34 L 44 52 L 6 52 Z M 56 34 L 94 34 L 94 52 L 56 52 Z ' +
-          'M 6 64 L 44 64 L 44 96 L 6 96 Z M 56 64 L 94 64 L 94 96 L 56 96 Z',
-        color: HOLLY_RED,
+          'M 8 38 L 44 38 L 44 96 L 8 96 Z M 56 38 L 92 38 L 92 96 L 56 96 Z',
+        color: RED,
       },
-      {
-        name: 'Ribbon',
-        d: 'M 44 34 L 56 34 L 56 52 L 94 52 L 94 64 L 56 64 L 56 96 L 44 96 L 44 64 L 6 64 L 6 52 L 44 52 Z',
-        color: GOLD,
-      },
+      { name: 'Box shading', d: 'M 70 38 L 92 38 L 92 96 L 70 96 Z', color: RED_DARK },
+      { name: 'Lid', d: 'M 4 24 L 44 24 L 44 38 L 4 38 Z M 56 24 L 96 24 L 96 38 L 56 38 Z', color: RED_LIGHT },
+      { name: 'Ribbon', d: 'M 44 24 L 56 24 L 56 96 L 44 96 Z M 4 24 L 96 24 L 96 38 L 4 38 Z', color: GOLD },
       {
         name: 'Bow',
+        // The loops stop short of the top edge. Drawn any closer, satin rails
+        // and pull compensation push the sewn outline past the placement box,
+        // which the catalogue's own stitch test refuses.
         d:
-          'M 44 34 C 34 20 20 18 22 28 C 24 36 36 34 44 34 Z ' +
-          'M 56 34 C 66 20 80 18 78 28 C 76 36 64 34 56 34 Z',
+          'M 50 24 C 44 24 34 20 30 15 C 26 9 30 5 38 5 C 45 5 50 13 50 24 Z ' +
+          'M 50 24 C 56 24 66 20 70 15 C 74 9 70 5 62 5 C 55 5 50 13 50 24 Z ' +
+          'M 44 17 L 56 17 L 58 26 L 42 26 Z',
         color: GOLD,
+      },
+      {
+        name: 'Bow shading',
+        d: 'M 50 24 C 56 24 66 20 70 15 C 74 9 70 5 62 5 C 66 10 60 18 50 24 Z',
+        color: GOLD_DARK,
       },
     ],
   },
@@ -207,51 +306,84 @@ export const CHRISTMAS_SHAPES: LibraryShape[] = [
     id: 'christmas-bell',
     name: 'Bell',
     category: 'christmas',
-    keywords: ['jingle', 'ring', 'chime'],
+    keywords: ['jingle', 'ring', 'chime', 'gold', 'sleigh'],
     parts: [
       {
         name: 'Bell',
-        d: 'M 50 6 C 53 6 55 8 55 11 C 69 15 79 30 79 48 C 79 66 83 76 89 82 L 11 82 C 17 76 21 66 21 48 C 21 30 31 15 45 11 C 45 8 47 6 50 6 Z',
+        d:
+          'M 50 6 C 55 6 59 10 59 15 C 59 17 58 19 57 21 ' +
+          'C 74 27 84 44 84 64 C 84 74 86 80 92 84 L 8 84 ' +
+          'C 14 80 16 74 16 64 C 16 44 26 27 43 21 ' +
+          'C 42 19 41 17 41 15 C 41 10 45 6 50 6 Z',
         color: GOLD,
       },
-      {
-        name: 'Clapper',
-        d: 'M 50 84 C 54.42 84 58 87.58 58 92 C 58 96.42 54.42 100 50 100 C 45.58 100 42 96.42 42 92 C 42 87.58 45.58 84 50 84 Z',
-        color: '#a8761f',
-      },
+      { name: 'Shine', d: 'M 30 44 C 32 36 36 30 42 26 L 46 32 C 41 36 38 42 37 48 Z', color: GOLD_LIGHT },
+      { name: 'Shading', d: 'M 62 24 C 78 34 84 48 84 64 C 84 74 86 80 92 84 L 62 84 Z', color: GOLD_DARK },
+      { name: 'Rim', d: 'M 8 84 L 92 84 L 92 92 L 8 92 Z', color: GOLD_DARK },
+      { name: 'Clapper', d: circle(50, 93, 6), color: GOLD_DARK },
     ],
   },
   {
     id: 'christmas-stocking',
     name: 'Stocking',
     category: 'christmas',
-    keywords: ['sock', 'fireplace', 'santa', 'gift'],
+    keywords: ['sock', 'fireplace', 'presents', 'hang', 'chimney'],
     parts: [
       {
-        name: 'Boot',
-        d: 'M 28 26 L 72 26 L 72 60 C 72 68 78 72 86 76 C 94 80 98 88 96 96 C 95 99 92 100 88 100 L 48 100 C 37 100 28 91 28 80 Z',
-        color: HOLLY_RED,
+        name: 'Sock',
+        d:
+          'M 24 24 L 66 24 L 66 56 C 66 62 62 66 54 70 ' +
+          'C 40 78 30 84 22 92 C 14 98 4 96 4 86 C 4 76 12 68 24 60 Z',
+        color: RED,
       },
-      { name: 'Cuff', d: 'M 22 6 L 78 6 L 78 28 L 22 28 Z', color: SNOW_WHITE },
+      {
+        name: 'Heel and toe',
+        d:
+          'M 24 60 C 18 66 12 72 8 78 C 4 84 6 92 14 92 C 8 86 12 76 24 68 Z ' +
+          'M 4 86 C 4 78 10 72 18 80 C 24 86 22 96 12 96 C 6 96 4 92 4 86 Z',
+        color: RED_DARK,
+      },
+      { name: 'Cuff', d: 'M 20 4 L 70 4 L 70 26 L 20 26 Z', color: WHITE },
+      { name: 'Cuff shading', d: 'M 56 4 L 70 4 L 70 26 L 56 26 Z', color: SILVER_LIGHT },
+      { name: 'Hanger', d: 'M 70 6 L 78 6 L 78 22 L 70 22 Z', color: PINE },
+      {
+        name: 'Trim',
+        d: 'M 24 34 L 66 34 L 66 42 L 24 42 Z',
+        color: PINE,
+      },
     ],
   },
   {
     id: 'christmas-wreath',
     name: 'Wreath',
     category: 'christmas',
-    keywords: ['garland', 'door', 'ring', 'holly'],
+    keywords: ['door', 'circle', 'garland', 'holly', 'ring'],
     parts: [
+      { name: 'Ring', d: ring(50, 50, 38, 22), color: PINE },
       {
-        name: 'Ring',
+        name: 'Sprigs',
+        // Tufts breaking the outer edge, so the wreath is foliage and not a
+        // green doughnut.
         d:
-          'M 50 2 C 76.51 2 98 23.49 98 50 C 98 76.51 76.51 98 50 98 C 23.49 98 2 76.51 2 50 C 2 23.49 23.49 2 50 2 Z ' +
-          'M 50 24 C 35.64 24 24 35.64 24 50 C 24 64.36 35.64 76 50 76 C 64.36 76 76 64.36 76 50 C 76 35.64 64.36 24 50 24 Z',
-        color: TREE_GREEN,
+          `${circle(50, 12, 9)} ${circle(77, 23, 9)} ${circle(88, 50, 9)} ` +
+          `${circle(77, 77, 9)} ${circle(50, 88, 9)} ${circle(23, 77, 9)} ` +
+          `${circle(12, 50, 9)} ${circle(23, 23, 9)}`,
+        color: PINE_DARK,
+      },
+      {
+        name: 'Berries',
+        d:
+          `${circle(36, 22, 4.5)} ${circle(68, 30, 4.5)} ${circle(78, 62, 4.5)} ` +
+          `${circle(38, 80, 4.5)} ${circle(18, 42, 4.5)} ${circle(60, 76, 4.5)}`,
+        color: RED,
       },
       {
         name: 'Bow',
-        d: 'M 50 80 C 42 72 28 72 30 82 C 32 90 44 88 50 84 C 56 88 68 90 70 82 C 72 72 58 72 50 80 Z',
-        color: HOLLY_RED,
+        d:
+          'M 50 88 C 42 88 30 94 26 100 L 24 88 C 30 82 42 80 50 84 Z ' +
+          'M 50 88 C 58 88 70 94 74 100 L 76 88 C 70 82 58 80 50 84 Z ' +
+          'M 43 82 L 57 82 L 59 96 L 41 96 Z',
+        color: RED_DARK,
       },
     ],
   },
@@ -259,103 +391,137 @@ export const CHRISTMAS_SHAPES: LibraryShape[] = [
     id: 'christmas-reindeer',
     name: 'Reindeer',
     category: 'christmas',
-    keywords: ['deer', 'rudolph', 'antlers', 'sleigh'],
+    keywords: ['deer', 'rudolph', 'antlers', 'sleigh', 'red nose'],
     parts: [
       {
         name: 'Antlers',
+        // Branched and asymmetric within each side, because a symmetric rack
+        // reads as a plant.
         d:
-          'M 40 42 L 33 22 L 21 20 L 29 13 L 23 3 L 36 10 L 40 1 L 45 19 L 46 40 Z ' +
-          'M 60 42 L 67 22 L 79 20 L 71 13 L 77 3 L 64 10 L 60 1 L 55 19 L 54 40 Z',
-        color: '#6b4423',
+          'M 30 34 L 22 20 L 10 16 L 6 6 L 12 4 L 16 12 L 26 16 L 22 4 L 28 2 L 34 18 L 38 32 Z ' +
+          'M 70 34 L 78 20 L 90 16 L 94 6 L 88 4 L 84 12 L 74 16 L 78 4 L 72 2 L 66 18 L 62 32 Z ' +
+          'M 16 14 L 4 22 L 8 27 L 20 20 Z M 84 14 L 96 22 L 92 27 L 80 20 Z',
+        color: WOOD_DARK,
       },
+      { name: 'Ears', d: `${ellipse(24, 44, 10, 7)} ${ellipse(76, 44, 10, 7)}`, color: BROWN_DARK },
       {
         name: 'Head',
-        d:
-          'M 50 40 C 62 40 70 51 70 65 C 70 81 62 94 50 94 C 38 94 30 81 30 65 C 30 51 38 40 50 40 Z ' +
-          'M 42 58 C 44.21 58 46 60.24 46 63 C 46 65.76 44.21 68 42 68 C 39.79 68 38 65.76 38 63 C 38 60.24 39.79 58 42 58 Z ' +
-          'M 58 58 C 60.21 58 62 60.24 62 63 C 62 65.76 60.21 68 58 68 C 55.79 68 54 65.76 54 63 C 54 60.24 55.79 58 58 58 Z ' +
-          'M 50 78 C 55.52 78 60 82.48 60 88 C 60 93.52 55.52 98 50 98 C 44.48 98 40 93.52 40 88 C 40 82.48 44.48 78 50 78 Z',
-        color: '#a5763f',
+        d: 'M 50 26 C 68 26 78 40 78 58 C 78 76 66 90 50 90 C 34 90 22 76 22 58 C 22 40 32 26 50 26 Z',
+        color: BROWN,
       },
       {
-        name: 'Eyes',
-        d:
-          'M 42 58 C 44.21 58 46 60.24 46 63 C 46 65.76 44.21 68 42 68 C 39.79 68 38 65.76 38 63 C 38 60.24 39.79 58 42 58 Z ' +
-          'M 58 58 C 60.21 58 62 60.24 62 63 C 62 65.76 60.21 68 58 68 C 55.79 68 54 65.76 54 63 C 54 60.24 55.79 58 58 58 Z',
-        color: COAL,
+        name: 'Muzzle',
+        d: ellipse(50, 74, 20, 15),
+        color: WOOD_LIGHT,
       },
-      {
-        name: 'Nose',
-        d: 'M 50 78 C 55.52 78 60 82.48 60 88 C 60 93.52 55.52 98 50 98 C 44.48 98 40 93.52 40 88 C 40 82.48 44.48 78 50 78 Z',
-        color: HOLLY_RED,
-      },
+      { name: 'Eyes', d: `${circle(38, 52, 5)} ${circle(62, 52, 5)}`, color: INK },
+      { name: 'Eye shine', d: `${circle(36, 50, 1.8)} ${circle(60, 50, 1.8)}`, color: WHITE },
+      { name: 'Nose', d: ellipse(50, 70, 10, 8), color: RED },
+      { name: 'Nose shine', d: circle(47, 67, 3), color: RED_LIGHT },
+      { name: 'Mouth', d: 'M 46 80 L 54 80 L 54 88 L 46 88 Z M 38 84 L 62 84 L 62 88 L 38 88 Z', color: INK_SOFT },
     ],
   },
   {
     id: 'christmas-santa-hat',
     name: 'Santa hat',
     category: 'christmas',
-    keywords: ['father christmas', 'pom', 'red hat'],
+    keywords: ['father christmas', 'red', 'pompom', 'costume', 'cap'],
     parts: [
       {
-        name: 'Cone',
-        d: 'M 10 74 C 14 46 34 20 62 12 C 74 9 84 16 84 28 C 84 40 74 48 62 52 L 22 78 Z',
-        color: HOLLY_RED,
+        name: 'Cap',
+        d:
+          'M 8 68 C 8 40 26 18 52 18 C 66 18 76 22 84 30 ' +
+          'C 76 40 68 50 62 58 C 56 66 52 70 46 72 L 8 72 Z',
+        color: RED,
+      },
+      {
+        name: 'Tail',
+        d: 'M 84 30 C 90 36 94 44 94 52 C 94 60 88 66 80 66 C 74 66 70 62 68 56 C 74 48 80 38 84 30 Z',
+        color: RED,
+      },
+      {
+        name: 'Shading',
+        d: 'M 62 22 C 72 26 80 34 84 30 C 76 40 68 50 62 58 C 56 66 52 70 46 72 L 34 72 C 46 66 56 50 62 22 Z',
+        color: RED_DARK,
       },
       {
         name: 'Brim',
-        d: 'M 8 70 L 44 70 C 50 70 54 75 54 81 C 54 87 50 92 44 92 L 8 92 C 2 92 2 70 8 70 Z',
-        color: SNOW_WHITE,
+        d: 'M 2 66 C 2 62 6 60 12 60 L 52 60 C 58 60 62 62 62 66 L 62 84 C 62 88 58 90 52 90 L 12 90 C 6 90 2 88 2 84 Z',
+        color: WHITE,
       },
+      { name: 'Pompom', d: circle(81, 56, 14), color: WHITE },
       {
-        name: 'Pom',
-        d: 'M 84 18 C 89.52 18 94 22.48 94 28 C 94 33.52 89.52 38 84 38 C 78.48 38 74 33.52 74 28 C 74 22.48 78.48 18 84 18 Z',
-        color: SNOW_WHITE,
+        name: 'Brim shading',
+        d: 'M 46 60 L 52 60 C 58 60 62 62 62 66 L 62 84 C 62 88 58 90 52 90 L 46 90 Z',
+        color: SILVER_LIGHT,
       },
+      { name: 'Pompom shading', d: 'M 88 46 C 96 54 94 68 84 70 C 90 64 90 54 84 48 Z', color: SILVER_LIGHT },
     ],
   },
   {
     id: 'christmas-gingerbread',
     name: 'Gingerbread man',
     category: 'christmas',
-    keywords: ['cookie', 'biscuit', 'baking', 'sweet'],
+    keywords: ['cookie', 'biscuit', 'baking', 'icing', 'treat'],
     parts: [
       {
-        name: 'Cookie',
+        name: 'Body',
         d:
-          'M 50 4 C 58 4 64 10 64 18 C 64 22 63 25 61 28 L 74 30 C 82 30 92 34 96 40 C 98 44 96 48 92 48 L 70 44 L 70 60 L 78 88 ' +
-          'C 80 94 76 98 70 98 C 66 98 63 96 62 92 L 54 68 L 46 68 L 38 92 C 37 96 34 98 30 98 C 24 98 20 94 22 88 L 30 60 L 30 44 ' +
-          'L 8 48 C 4 48 2 44 4 40 C 8 34 18 30 26 30 L 39 28 C 37 25 36 22 36 18 C 36 10 42 4 50 4 Z ' +
-          'M 50 52 C 52.21 52 54 53.79 54 56 C 54 58.21 52.21 60 50 60 C 47.79 60 46 58.21 46 56 C 46 53.79 47.79 52 50 52 Z ' +
-          'M 50 36 C 52.21 36 54 37.79 54 40 C 54 42.21 52.21 44 50 44 C 47.79 44 46 42.21 46 40 C 46 37.79 47.79 36 50 36 Z',
-        color: '#b5763b',
+          'M 50 2 C 60 2 68 10 68 20 C 68 24 67 27 65 30 L 78 30 ' +
+          'C 88 30 96 36 96 44 C 96 52 88 56 78 56 L 68 56 L 72 84 ' +
+          'C 74 94 68 98 60 98 C 54 98 50 94 50 88 C 50 94 46 98 40 98 ' +
+          'C 32 98 26 94 28 84 L 32 56 L 22 56 C 12 56 4 52 4 44 ' +
+          'C 4 36 12 30 22 30 L 35 30 C 33 27 32 24 32 20 C 32 10 40 2 50 2 Z',
+        color: WOOD,
       },
       {
-        name: 'Buttons',
-        d:
-          'M 50 52 C 52.21 52 54 53.79 54 56 C 54 58.21 52.21 60 50 60 C 47.79 60 46 58.21 46 56 C 46 53.79 47.79 52 50 52 Z ' +
-          'M 50 36 C 52.21 36 54 37.79 54 40 C 54 42.21 52.21 44 50 44 C 47.79 44 46 42.21 46 40 C 46 37.79 47.79 36 50 36 Z',
-        color: SNOW_WHITE,
+        name: 'Shading',
+        d: 'M 60 4 C 66 8 68 14 68 20 C 68 24 67 27 65 30 L 78 30 C 88 30 96 36 96 44 C 96 52 88 56 78 56 L 68 56 L 72 84 C 74 94 68 98 60 98 C 66 92 66 84 64 74 L 58 40 Z',
+        color: BROWN,
       },
+      { name: 'Eyes', d: `${circle(42, 18, 3.5)} ${circle(58, 18, 3.5)}`, color: INK },
+      { name: 'Mouth', d: 'M 40 25 C 44 30 56 30 60 25 L 62 28 C 58 34 42 34 38 28 Z', color: INK },
+      {
+        name: 'Icing',
+        d:
+          'M 20 38 C 26 44 34 44 40 38 L 42 44 C 34 52 24 52 18 44 Z ' +
+          'M 60 38 C 66 44 74 44 80 38 L 82 44 C 74 52 64 52 58 44 Z ' +
+          'M 34 62 C 40 68 60 68 66 62 L 68 68 C 60 76 40 76 32 68 Z',
+        color: WHITE,
+      },
+      { name: 'Buttons', d: `${circle(50, 48, 5)} ${circle(50, 64, 5)}`, color: RED },
     ],
   },
   {
     id: 'christmas-mitten',
     name: 'Mitten',
     category: 'christmas',
-    keywords: ['glove', 'winter', 'warm', 'hand'],
+    keywords: ['glove', 'winter', 'knit', 'warm', 'hand'],
     parts: [
       {
         name: 'Mitten',
-        d: 'M 30 28 L 72 28 C 80 28 86 34 86 42 L 86 86 C 86 94 80 100 72 100 L 44 100 C 36 100 30 94 30 86 Z',
-        color: HOLLY_RED,
+        // A thumb is not optional: without one the shape is a sock.
+        d:
+          'M 30 30 L 74 30 C 84 30 90 38 90 50 L 90 76 C 90 88 84 96 74 96 ' +
+          'L 40 96 C 30 96 24 88 24 76 L 24 62 L 16 62 C 8 62 2 56 2 46 ' +
+          'C 2 36 8 30 16 30 C 22 30 26 34 28 40 L 30 46 Z',
+        color: RED,
       },
       {
-        name: 'Thumb',
-        d: 'M 30 48 C 22 46 12 50 10 58 C 8 66 14 72 22 72 L 30 72 Z',
-        color: HOLLY_RED,
+        name: 'Shading',
+        d: 'M 60 30 L 74 30 C 84 30 90 38 90 50 L 90 76 C 90 88 84 96 74 96 L 60 96 Z',
+        color: RED_DARK,
       },
-      { name: 'Cuff', d: 'M 26 10 L 90 10 L 90 30 L 26 30 Z', color: SNOW_WHITE },
+      { name: 'Cuff', d: 'M 26 12 L 92 12 L 92 34 L 26 34 Z', color: WHITE },
+      { name: 'Cuff shading', d: 'M 78 12 L 92 12 L 92 34 L 78 34 Z', color: SILVER_LIGHT },
+      {
+        name: 'Pattern',
+        d:
+          'M 40 52 L 48 44 L 56 52 L 48 60 Z M 62 60 L 70 52 L 78 60 L 70 68 Z ' +
+          'M 40 76 L 48 68 L 56 76 L 48 84 Z',
+        color: CREAM,
+      },
+      { name: 'Cord', d: 'M 92 18 C 98 24 98 34 92 40 L 88 34 C 92 30 92 26 88 22 Z', color: PINE },
     ],
   },
 ];

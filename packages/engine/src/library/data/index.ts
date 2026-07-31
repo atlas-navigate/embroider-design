@@ -18,6 +18,7 @@ import { SCHOOL_SHAPES } from './school.js';
 import { PET_SHAPES } from './pets.js';
 import { NAUTICAL_SHAPES } from './nautical.js';
 import { NATURE_SHAPES } from './nature.js';
+import { JEWISH_SHAPES } from './jewish.js';
 
 /**
  * The catalogue, assembled.
@@ -45,4 +46,5 @@ export const CATALOGUE: readonly LibraryShape[] = [
   ...PET_SHAPES,
   ...NAUTICAL_SHAPES,
   ...NATURE_SHAPES,
+  ...JEWISH_SHAPES,
 ];

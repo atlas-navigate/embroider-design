@@ -1,4 +1,26 @@
 import type { LibraryShape } from '../types.js';
+import {
+  BLUSH,
+  CREAM,
+  CREAM_DARK,
+  GLASS,
+  GOLD,
+  GOLD_DARK,
+  GOLD_LIGHT,
+  GREEN,
+  GREEN_DARK,
+  ICE,
+  ICE_LIGHT,
+  INK_SOFT,
+  ORANGE,
+  PINK,
+  PINK_DARK,
+  RED,
+  SILVER_LIGHT,
+  WHITE,
+  WOOD,
+  YELLOW_LIGHT,
+} from './palette.js';
 
 /**
  * Wedding.
@@ -8,53 +30,135 @@ import type { LibraryShape } from '../types.js';
  * outer circle and the right ring's — nesting depth two, which the region
  * grouper correctly reads as a filled island, and the hole in the left ring
  * would stitch solid. Two parts, two independent nestings, no ambiguity.
+ *
+ * A third part then re-draws the short stretch of the left band that crosses in
+ * front of the right one. Without it the rings merely overlap; with it they
+ * interlock, which is the whole point of the symbol.
  */
-const GOLD = '#d8a13a';
-const GOLD_DEEP = '#b8842a';
-const CREAM = '#f5efe2';
-const BLUSH = '#e8a0b4';
-const LEAF = '#5a8f5e';
+
+/** Circle drawn as four cubics. 0.5523 is the standard quarter-arc constant. */
+const K = 0.5523;
+
+function circle(cx: number, cy: number, r: number, clockwise = true): string {
+  const k = +(r * K).toFixed(2);
+  const round = (n: number): string => String(+n.toFixed(2));
+  const [x, y] = [round(cx), round(cy)];
+  const [l, t, b, right] = [round(cx - r), round(cy - r), round(cy + r), round(cx + r)];
+  const [kl, kr, kt, kb] = [round(cx - k), round(cx + k), round(cy - k), round(cy + k)];
+  return clockwise
+    ? `M ${x} ${t} C ${kr} ${t} ${right} ${kt} ${right} ${y} ` +
+        `C ${right} ${kb} ${kr} ${b} ${x} ${b} ` +
+        `C ${kl} ${b} ${l} ${kb} ${l} ${y} ` +
+        `C ${l} ${kt} ${kl} ${t} ${x} ${t} Z`
+    : `M ${x} ${t} C ${kl} ${t} ${l} ${kt} ${l} ${y} ` +
+        `C ${l} ${kb} ${kl} ${b} ${x} ${b} ` +
+        `C ${kr} ${b} ${right} ${kb} ${right} ${y} ` +
+        `C ${right} ${kt} ${kr} ${t} ${x} ${t} Z`;
+}
+
+/** An annulus: outer ring, then a counter-ring the grouper reads as the hole. */
+function band(cx: number, cy: number, outer: number, inner: number): string {
+  return `${circle(cx, cy, outer, true)} ${circle(cx, cy, inner, false)}`;
+}
 
 export const WEDDING_SHAPES: LibraryShape[] = [
-  {
-    id: 'wedding-rings',
-    name: 'Wedding rings',
-    category: 'wedding',
-    keywords: ['marriage', 'engaged', 'gold', 'bands', 'interlocking'],
-    parts: [
-      {
-        name: 'Left ring',
-        d:
-          'M 36 21 C 54.78 21 70 36.22 70 55 C 70 73.78 54.78 89 36 89 C 17.22 89 2 73.78 2 55 C 2 36.22 17.22 21 36 21 Z ' +
-          'M 36 31 C 22.75 31 12 41.75 12 55 C 12 68.25 22.75 79 36 79 C 49.25 79 60 68.25 60 55 C 60 41.75 49.25 31 36 31 Z',
-        color: GOLD,
-      },
-      {
-        name: 'Right ring',
-        d:
-          'M 64 21 C 82.78 21 98 36.22 98 55 C 98 73.78 82.78 89 64 89 C 45.22 89 30 73.78 30 55 C 30 36.22 45.22 21 64 21 Z ' +
-          'M 64 31 C 50.75 31 40 41.75 40 55 C 40 68.25 50.75 79 64 79 C 77.25 79 88 68.25 88 55 C 88 41.75 77.25 31 64 31 Z',
-        color: GOLD_DEEP,
-      },
-    ],
-  },
   {
     id: 'wedding-diamond-ring',
     name: 'Diamond ring',
     category: 'wedding',
-    keywords: ['engagement', 'proposal', 'gem', 'jewel'],
+    keywords: ['engagement', 'proposal', 'gem', 'jewel', 'solitaire', 'brilliant', 'stone'],
+    parts: [
+      { name: 'Band', d: band(50, 74, 24, 16), color: GOLD },
+      {
+        name: 'Setting',
+        // The basket the stone sits in, and the two claws that grip its girdle.
+        d:
+          'M 41 41 L 59 41 L 56 57 L 44 57 Z ' +
+          'M 24 23 L 31 21 L 33 35 L 26 36 Z ' +
+          'M 76 23 L 69 21 L 67 35 L 74 36 Z',
+        color: GOLD_DARK,
+      },
+      {
+        name: 'Stone',
+        // A round brilliant seen face on: table across the top, crown sloping
+        // out to the girdle, pavilion tapering to the culet.
+        d: 'M 36 6 L 64 6 L 76 24 L 50 52 L 24 24 Z',
+        color: ICE,
+      },
+      {
+        name: 'Facets',
+        d:
+          'M 36 6 L 64 6 L 58 20 L 42 20 Z ' +
+          'M 24 24 L 36 24 L 50 52 Z ' +
+          'M 76 24 L 64 24 L 50 52 Z',
+        color: ICE_LIGHT,
+      },
+      {
+        name: 'Highlights',
+        // One spark on the table, one on the inside curve of the band — the two
+        // places light actually lands on a ring worn face on.
+        d:
+          'M 40 9 L 47 9 L 45 17 L 38 17 Z ' +
+          'M 32 62 C 35 58 39 55 44 54 L 46 60 C 42 61 39 64 37 67 Z',
+        color: GOLD_LIGHT,
+      },
+    ],
+  },
+  {
+    id: 'wedding-band',
+    name: 'Wedding band',
+    category: 'wedding',
+    keywords: ['ring', 'plain', 'gold', 'marriage', 'vow', 'no stone'],
     parts: [
       {
         name: 'Band',
+        // Slightly taller than wide: a ring lying face on is a circle, and a
+        // ring standing up is an ellipse. The ellipse reads as an object.
         d:
-          'M 50 36 C 66.57 36 80 49.43 80 66 C 80 82.57 66.57 96 50 96 C 33.43 96 20 82.57 20 66 C 20 49.43 33.43 36 50 36 Z ' +
-          'M 50 44 C 37.85 44 28 53.85 28 66 C 28 78.15 37.85 88 50 88 C 62.15 88 72 78.15 72 66 C 72 53.85 62.15 44 50 44 Z',
+          'M 50 6 C 72.09 6 90 27.7 90 52 C 90 76.3 72.09 98 50 98 ' +
+          'C 27.91 98 10 76.3 10 52 C 10 27.7 27.91 6 50 6 Z ' +
+          'M 50 20 C 34.54 20 22 34.33 22 52 C 22 69.67 34.54 84 50 84 ' +
+          'C 65.46 84 78 69.67 78 52 C 78 34.33 65.46 20 50 20 Z',
         color: GOLD,
       },
       {
-        name: 'Gem',
-        d: 'M 34 16 L 66 16 L 50 40 Z M 34 16 L 42 6 L 58 6 L 66 16 Z',
-        color: '#8fd3e8',
+        name: 'Shadow',
+        // The far side of the band, where the metal turns away from the light.
+        d: 'M 78 40 C 80 47 80 58 78 66 L 87 70 C 90 60 90 44 87 34 Z',
+        color: GOLD_DARK,
+      },
+      {
+        name: 'Shine',
+        d:
+          'M 16 40 C 20 27 30 15 43 11 L 47 22 C 37 26 29 35 26 45 Z ' +
+          'M 58 88 C 65 86 71 82 76 76 L 83 82 C 77 89 69 94 60 96 Z',
+        color: GOLD_LIGHT,
+      },
+    ],
+  },
+  {
+    id: 'wedding-rings',
+    name: 'Wedding rings',
+    category: 'wedding',
+    keywords: ['marriage', 'engaged', 'gold', 'bands', 'interlocking', 'pair', 'two rings'],
+    parts: [
+      { name: 'Left ring', d: band(36, 56, 32, 23), color: GOLD },
+      { name: 'Right ring', d: band(64, 56, 32, 23), color: GOLD_DARK },
+      {
+        name: 'Interlock',
+        // The stretch of the left band that passes in front of the right one.
+        // Sewn last and in the lit tone rather than the left ring's own gold:
+        // it has to come after the right ring to read as crossing over it, and
+        // a third pass of the same gold would mean rethreading the same spool.
+        // A highlight along the crossing is what a photographed pair shows
+        // anyway.
+        d: 'M 54.4 29.8 L 62.2 37.6 L 54.8 42.8 L 49.2 37.2 Z',
+        color: GOLD_LIGHT,
+      },
+      {
+        name: 'Shine',
+        d: 'M 10 46 C 12 36 18 28 27 24 L 31 33 C 25 36 21 42 19 49 Z',
+        color: GOLD_LIGHT,
       },
     ],
   },
@@ -66,20 +170,34 @@ export const WEDDING_SHAPES: LibraryShape[] = [
     parts: [
       {
         name: 'Left bell',
-        d: 'M 28 14 C 30 14 32 16 32 18 C 42 21 49 32 49 46 C 49 60 52 68 56 72 L 0 72 C 4 68 7 60 7 46 C 7 32 14 21 24 18 C 24 16 26 14 28 14 Z',
+        d:
+          'M 28 8 C 30.8 8 33 10.2 33 13 C 33 14 32.8 14.9 32.4 15.7 ' +
+          'C 43 19.5 50 30 50 44 C 50 56 52 64 57 69 L 0 69 ' +
+          'C 5 64 7 56 7 44 C 7 30 13 19.5 23.6 15.7 ' +
+          'C 23.2 14.9 23 14 23 13 C 23 10.2 25.2 8 28 8 Z',
         color: GOLD,
       },
       {
         name: 'Right bell',
-        d: 'M 72 26 C 74 26 76 28 76 30 C 86 33 93 44 93 58 C 93 72 96 80 100 84 L 44 84 C 48 80 51 72 51 58 C 51 44 58 33 68 30 C 68 28 70 26 72 26 Z',
-        color: GOLD_DEEP,
+        d:
+          'M 72 22 C 74.8 22 77 24.2 77 27 C 77 28 76.8 28.9 76.4 29.7 ' +
+          'C 87 33.5 93 44 93 58 C 93 70 95 78 100 83 L 43 83 ' +
+          'C 48 78 50 70 50 58 C 50 44 57 33.5 67.6 29.7 ' +
+          'C 67.2 28.9 67 28 67 27 C 67 24.2 69.2 22 72 22 Z',
+        color: GOLD,
       },
+      // Both rims and the clappers sew in one dark-gold run, after both bells.
+      { name: 'Left rim', d: 'M 0 69 L 57 69 L 57 76 L 0 76 Z', color: GOLD_DARK },
+      { name: 'Right rim', d: 'M 43 83 L 100 83 L 100 90 L 43 90 Z', color: GOLD_DARK },
       {
         name: 'Clappers',
-        d:
-          'M 28 74 C 31.31 74 34 76.69 34 80 C 34 83.31 31.31 86 28 86 C 24.69 86 22 83.31 22 80 C 22 76.69 24.69 74 28 74 Z ' +
-          'M 72 86 C 75.31 86 78 88.69 78 92 C 78 95.31 75.31 98 72 98 C 68.69 98 66 95.31 66 92 C 66 88.69 68.69 86 72 86 Z',
-        color: '#8a6a1f',
+        d: `${circle(28, 82, 6)} ${circle(72, 94, 6)}`,
+        color: GOLD_DARK,
+      },
+      {
+        name: 'Shine',
+        d: 'M 14 40 C 16 30 20 23 26 20 L 29 27 C 25 30 22 36 21 43 Z',
+        color: GOLD_LIGHT,
       },
     ],
   },
@@ -87,23 +205,29 @@ export const WEDDING_SHAPES: LibraryShape[] = [
     id: 'wedding-dove',
     name: 'Dove',
     category: 'wedding',
-    keywords: ['bird', 'peace', 'white', 'flying'],
+    keywords: ['bird', 'peace', 'white', 'flying', 'olive'],
     parts: [
       {
         name: 'Body',
-        d: 'M 4 58 C 16 46 32 40 48 40 C 54 32 64 26 76 26 C 82 26 88 28 92 32 L 84 36 C 88 40 90 46 90 52 C 90 68 76 82 58 84 L 38 86 C 26 88 14 86 6 80 C 12 78 18 74 22 68 C 14 66 8 62 4 58 Z',
-        color: CREAM,
+        // Head, breast, back and a fanned tail, drawn as one silhouette so the
+        // bird has a single clean outline to satin around.
+        d:
+          'M 82 22 C 88 22 92 26 92 32 C 92 34 91.5 36 90.5 37.5 ' +
+          'L 99 40 L 89 44 C 88 58 80 70 68 76 ' +
+          'C 60 80 50 82 40 82 L 12 88 L 26 74 L 4 76 L 22 62 ' +
+          'C 24 46 34 34 48 30 C 58 27 68 26 74 26 C 76 23 79 22 82 22 Z',
+        color: WHITE,
       },
       {
         name: 'Wing',
-        d: 'M 38 46 C 50 42 62 46 68 56 C 60 64 48 66 38 62 C 34 56 34 50 38 46 Z',
-        color: '#ddd5c4',
+        d:
+          'M 40 30 C 52 26 64 30 70 40 C 66 52 54 60 40 58 ' +
+          'C 32 56 28 48 30 40 C 32 34 36 31 40 30 Z',
+        color: CREAM,
       },
-      {
-        name: 'Beak',
-        d: 'M 92 32 L 100 34 L 92 38 Z',
-        color: '#e2a53b',
-      },
+      { name: 'Wing edge', d: 'M 44 54 C 54 56 63 50 68 42 L 70 46 C 64 56 54 62 42 60 Z', color: CREAM_DARK },
+      { name: 'Beak', d: 'M 90.5 37.5 L 100 39 L 89 44 Z', color: ORANGE },
+      { name: 'Eye', d: circle(83, 30, 3), color: INK_SOFT },
     ],
   },
   {
@@ -112,20 +236,29 @@ export const WEDDING_SHAPES: LibraryShape[] = [
     category: 'wedding',
     keywords: ['tiers', 'celebrate', 'dessert', 'reception'],
     parts: [
-      { name: 'Bottom tier', d: 'M 12 74 L 88 74 L 88 96 L 12 96 Z', color: CREAM },
-      { name: 'Middle tier', d: 'M 24 52 L 76 52 L 76 72 L 24 72 Z', color: CREAM },
-      { name: 'Top tier', d: 'M 34 30 L 66 30 L 66 50 L 34 50 Z', color: CREAM },
+      { name: 'Bottom tier', d: 'M 10 74 L 90 74 L 90 96 L 10 96 Z', color: CREAM },
+      { name: 'Middle tier', d: 'M 22 50 L 78 50 L 78 72 L 22 72 Z', color: CREAM },
+      { name: 'Top tier', d: 'M 33 28 L 67 28 L 67 48 L 33 48 Z', color: CREAM },
       {
-        name: 'Icing',
-        d:
-          'M 12 74 C 20 80 28 68 36 74 C 44 80 52 68 60 74 C 68 80 76 68 88 74 L 88 78 L 12 78 Z ' +
-          'M 24 52 C 32 58 40 46 48 52 C 56 58 64 46 76 52 L 76 56 L 24 56 Z',
-        color: BLUSH,
+        name: 'Shading',
+        d: 'M 74 74 L 90 74 L 90 96 L 74 96 Z M 66 50 L 78 50 L 78 72 L 66 72 Z M 59 28 L 67 28 L 67 48 L 59 48 Z',
+        color: CREAM_DARK,
       },
       {
+        name: 'Icing',
+        // Scalloped piping along the top of each tier, the detail that makes a
+        // stack of rectangles read as a cake.
+        d:
+          'M 10 74 C 18 82 26 68 34 74 C 42 80 50 68 58 74 C 66 80 76 68 90 74 L 90 79 L 10 79 Z ' +
+          'M 22 50 C 30 57 38 45 46 50 C 54 55 62 45 78 50 L 78 55 L 22 55 Z ' +
+          'M 33 28 C 40 34 47 24 54 28 C 60 31 64 26 67 28 L 67 33 L 33 33 Z',
+        color: PINK,
+      },
+      { name: 'Ribbons', d: 'M 46 79 L 54 79 L 54 96 L 46 96 Z M 46 55 L 54 55 L 54 72 L 46 72 Z', color: PINK_DARK },
+      {
         name: 'Topper',
-        d: 'M 50 26 C 42 19 38 14 38 9 C 38 5 41 2 45 2 C 47 2 49 3 50 5 C 51 3 53 2 55 2 C 59 2 62 5 62 9 C 62 14 58 19 50 26 Z',
-        color: '#d6335a',
+        d: 'M 50 24 C 41 16 36 11 36 6 C 36 2.5 38.5 0 42 0 C 45 0 48 2 50 5 C 52 2 55 0 58 0 C 61.5 0 64 2.5 64 6 C 64 11 59 16 50 24 Z',
+        color: RED,
       },
     ],
   },
@@ -137,22 +270,30 @@ export const WEDDING_SHAPES: LibraryShape[] = [
     parts: [
       {
         name: 'Left flute',
-        d: 'M 4 6 L 40 6 L 34 42 C 34 48 30 52 26 54 L 26 88 L 38 88 L 38 94 L 6 94 L 6 88 L 18 88 L 18 54 C 14 52 10 48 10 42 Z',
-        color: '#cfe3ef',
+        d:
+          'M 4 4 L 42 4 L 36 40 C 35 47 31 51 27 53 L 27 88 L 39 88 ' +
+          'C 41 88 42 89 42 91 C 42 93 41 94 39 94 L 7 94 C 5 94 4 93 4 91 ' +
+          'C 4 89 5 88 7 88 L 19 88 L 19 53 C 15 51 11 47 10 40 Z',
+        color: GLASS,
       },
       {
         name: 'Right flute',
-        d: 'M 60 6 L 96 6 L 90 42 C 90 48 86 52 82 54 L 82 88 L 94 88 L 94 94 L 62 94 L 62 88 L 74 88 L 74 54 C 70 52 66 48 66 42 Z',
-        color: '#cfe3ef',
+        d:
+          'M 58 4 L 96 4 L 90 40 C 89 47 85 51 81 53 L 81 88 L 93 88 ' +
+          'C 95 88 96 89 96 91 C 96 93 95 94 93 94 L 61 94 C 59 94 58 93 58 91 ' +
+          'C 58 89 59 88 61 88 L 73 88 L 73 53 L 73 53 C 69 51 65 47 64 40 Z',
+        color: GLASS,
+      },
+      {
+        name: 'Champagne',
+        d: 'M 8 18 L 38 18 L 34 40 C 33 46 29 49 23 49 C 17 49 13 46 12 40 Z ' +
+          'M 62 18 L 92 18 L 88 40 C 87 46 83 49 77 49 C 71 49 67 46 66 40 Z',
+        color: YELLOW_LIGHT,
       },
       {
         name: 'Bubbles',
-        d:
-          'M 22 18 C 24.21 18 26 19.79 26 22 C 26 24.21 24.21 26 22 26 C 19.79 26 18 24.21 18 22 C 18 19.79 19.79 18 22 18 Z ' +
-          'M 30 30 C 31.66 30 33 31.34 33 33 C 33 34.66 31.66 36 30 36 C 28.34 36 27 34.66 27 33 C 27 31.34 28.34 30 30 30 Z ' +
-          'M 78 18 C 80.21 18 82 19.79 82 22 C 82 24.21 80.21 26 78 26 C 75.79 26 74 24.21 74 22 C 74 19.79 75.79 18 78 18 Z ' +
-          'M 70 30 C 71.66 30 73 31.34 73 33 C 73 34.66 71.66 36 70 36 C 68.34 36 67 34.66 67 33 C 67 31.34 68.34 30 70 30 Z',
-        color: '#f2d98a',
+        d: `${circle(20, 26, 3.5)} ${circle(28, 35, 2.5)} ${circle(24, 42, 2)} ${circle(80, 26, 3.5)} ${circle(72, 35, 2.5)} ${circle(76, 42, 2)}`,
+        color: SILVER_LIGHT,
       },
     ],
   },
@@ -165,22 +306,27 @@ export const WEDDING_SHAPES: LibraryShape[] = [
       {
         name: 'Leaves',
         d:
-          'M 50 52 C 34 50 20 42 12 28 C 26 26 40 34 50 48 Z ' +
-          'M 50 52 C 66 50 80 42 88 28 C 74 26 60 34 50 48 Z',
-        color: LEAF,
+          'M 50 50 C 34 50 20 42 10 28 C 26 24 42 32 52 48 Z ' +
+          'M 50 50 C 66 50 80 42 90 28 C 74 24 58 32 48 48 Z ' +
+          'M 50 54 C 42 50 36 42 34 32 C 42 36 48 44 50 52 Z ' +
+          'M 50 54 C 58 50 64 42 66 32 C 58 36 52 44 50 52 Z',
+        color: GREEN,
       },
       {
-        name: 'Flowers',
-        d:
-          'M 30 16 C 40 16 46 24 46 34 C 46 44 40 50 30 50 C 20 50 14 44 14 34 C 14 24 20 16 30 16 Z ' +
-          'M 70 16 C 80 16 86 24 86 34 C 86 44 80 50 70 50 C 60 50 54 44 54 34 C 54 24 60 16 70 16 Z ' +
-          'M 50 2 C 60 2 66 10 66 20 C 66 30 60 36 50 36 C 40 36 34 30 34 20 C 34 10 40 2 50 2 Z',
-        color: BLUSH,
+        name: 'Roses',
+        d: `${circle(28, 30, 15)} ${circle(72, 30, 15)} ${circle(50, 18, 16)} ${circle(38, 46, 12)} ${circle(62, 46, 12)}`,
+        color: PINK,
       },
+      {
+        name: 'Rose centres',
+        d: `${circle(28, 30, 6)} ${circle(72, 30, 6)} ${circle(50, 18, 6.5)} ${circle(38, 46, 5)} ${circle(62, 46, 5)}`,
+        color: PINK_DARK,
+      },
+      { name: 'Stems', d: 'M 44 56 L 56 56 L 58 84 L 42 84 Z', color: GREEN_DARK },
       {
         name: 'Ribbon',
-        d: 'M 42 52 L 58 52 L 62 92 C 62 96 58 100 50 100 C 42 100 38 96 38 92 Z',
-        color: '#e6dcc8',
+        d: 'M 40 82 L 60 82 L 62 92 C 62 97 57 100 50 100 C 43 100 38 97 38 92 Z',
+        color: BLUSH,
       },
     ],
   },
@@ -192,16 +338,29 @@ export const WEDDING_SHAPES: LibraryShape[] = [
     parts: [
       {
         name: 'Arch',
-        d: 'M 10 100 L 10 40 C 10 18 28 2 50 2 C 72 2 90 18 90 40 L 90 100 L 74 100 L 74 40 C 74 26 63 16 50 16 C 37 16 26 26 26 40 L 26 100 Z',
-        color: '#c9b48a',
+        d:
+          'M 8 100 L 8 42 C 8 20 27 2 50 2 C 73 2 92 20 92 42 L 92 100 L 76 100 ' +
+          'L 76 42 C 76 28 64 17 50 17 C 36 17 24 28 24 42 L 24 100 Z',
+        color: WOOD,
+      },
+      {
+        name: 'Greenery',
+        d:
+          'M 12 30 C 16 20 24 12 34 8 L 38 16 C 30 20 23 27 20 35 Z ' +
+          'M 88 30 C 84 20 76 12 66 8 L 62 16 C 70 20 77 27 80 35 Z ' +
+          'M 8 62 C 12 60 16 61 18 64 L 12 72 C 9 70 8 66 8 62 Z ' +
+          'M 92 62 C 88 60 84 61 82 64 L 88 72 C 91 70 92 66 92 62 Z',
+        color: GREEN_DARK,
       },
       {
         name: 'Flowers',
-        d:
-          'M 22 22 C 28 16 36 18 38 26 C 32 32 24 30 22 22 Z ' +
-          'M 78 22 C 72 16 64 18 62 26 C 68 32 76 30 78 22 Z ' +
-          'M 50 2 C 58 2 62 8 60 14 C 54 18 46 18 40 14 C 38 8 42 2 50 2 Z',
-        color: BLUSH,
+        d: `${circle(20, 26, 8)} ${circle(80, 26, 8)} ${circle(50, 10, 9)} ${circle(34, 15, 7)} ${circle(66, 15, 7)} ${circle(11, 70, 6)} ${circle(89, 70, 6)}`,
+        color: PINK,
+      },
+      {
+        name: 'Flower centres',
+        d: `${circle(20, 26, 3)} ${circle(80, 26, 3)} ${circle(50, 10, 3.5)} ${circle(34, 15, 2.5)} ${circle(66, 15, 2.5)}`,
+        color: PINK_DARK,
       },
     ],
   },

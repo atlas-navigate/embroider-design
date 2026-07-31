@@ -11,3 +11,4 @@ Thumbs.db
 .env
 .env.local
 coverage/
+packages/engine/catalogue*.svg

@@ -46,6 +46,15 @@ describe('the shape catalogue', () => {
     }
   });
 
+  it('ships nothing in the custom category', () => {
+    // `custom` is a real category id so a saved shape can be an ordinary
+    // `LibraryShape`, but it belongs to the user. Anything shipped in it would
+    // appear under "My shapes" with a delete button that could not work.
+    for (const shape of shapes) {
+      expect(shape.category, `${shape.id} ships as custom`).not.toBe('custom');
+    }
+  });
+
   it('gives every shape at least one part, and every part a name', () => {
     for (const shape of shapes) {
       expect(shape.parts.length, `${shape.id} has no parts`).toBeGreaterThan(0);
@@ -122,6 +131,30 @@ describe('the shape catalogue', () => {
       if (!bounds) continue;
       const extent = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
       expect(extent, `${shape.id} only spans ${extent.toFixed(1)} of 100`).toBeGreaterThan(75);
+    }
+  });
+
+  /**
+   * Parts sew in the order they are listed, and every change of thread is a
+   * stop where somebody re-threads the machine. A colour used for part 1 and
+   * again for part 5 is therefore not a stylistic detail — it is two extra
+   * thread changes on every garment, for a shape that could have been ordered
+   * to need none. Reordering the parts is nearly always possible; where it
+   * conflicts with the draw order, the fix is to recolour rather than to
+   * accept the extra stop.
+   */
+  it('uses each thread in one unbroken run of parts', () => {
+    for (const shape of shapes) {
+      const colours = shape.parts.map((part) => part.color ?? 'default');
+      const lastSeen = new Map<string, number>();
+      colours.forEach((colour, index) => {
+        const previous = lastSeen.get(colour);
+        expect(
+          previous === undefined || previous === index - 1,
+          `${shape.id} returns to ${colour} at part ${index} after leaving it — [${colours.join(' ')}]`,
+        ).toBe(true);
+        lastSeen.set(colour, index);
+      });
     }
   });
 });
