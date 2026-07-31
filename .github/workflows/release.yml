@@ -1,0 +1,76 @@
+name: Release
+
+# Pushing a v* tag builds and publishes the installer. This exists because the
+# release had been a manual step that a version bump did not enforce: 0.3.0 and
+# 0.4.0 were both committed, built locally and never uploaded, so the download
+# on the releases page stayed at 0.2.0 while the source moved two versions on.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Builds without publishing, and attaches the installer to the run. For
+  # proving the workflow still works without cutting a release.
+  workflow_dispatch:
+
+# electron-builder creates the release and uploads to it with GITHUB_TOKEN.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    # The NSIS target can only be built on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # electron-updater compares a release against packages/app/package.json's
+      # version, not against the tag. If those disagree the release publishes
+      # fine and then no installed copy ever offers it — silence rather than an
+      # error, which is the worst kind of release bug. Stop here instead.
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $version = (Get-Content packages/app/package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $version) {
+            throw "Tag $tag does not match packages/app/package.json version $version. Bump the app's version, or fix the tag."
+          }
+          Write-Host "Tag and app version agree on $version."
+
+      - name: Test the engine
+        run: npm test
+
+      - name: Build engine and app
+        run: npm run build
+
+      # On a tag, `--publish always` uploads three things to the release: the
+      # installer, its blockmap, and latest.yml — the file electron-updater
+      # actually reads. Owner, repo and releaseType come from
+      # packages/app/electron-builder.yml, so there is nothing to configure
+      # here. electron-builder is invoked directly rather than through
+      # `npm run package`, which would repeat the build above.
+      - name: Build the installer
+        working-directory: packages/app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+
+      - name: Attach the installer to this run
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Embroider-Design-installer
+          path: |
+            packages/app/release/*-setup.exe
+            packages/app/release/*-setup.exe.blockmap
+            packages/app/release/latest.yml
+          retention-days: 7

@@ -24,29 +24,45 @@ restart. This document is how you make a release it can find.
 
 ## Cutting a release
 
+**Pushing the tag is the release.** `.github/workflows/release.yml` runs on any
+`v*` tag: it installs, checks the tag against the app's version, runs the engine
+tests, builds, and publishes with `electron-builder --publish always`.
+
 1. **Bump the version.** `electron-updater` compares the release's version with
    `packages/app/package.json`'s `version`, so that is the field that matters:
 
    ```powershell
-   npm version 0.2.0 --workspace @embroider-design/app --no-git-tag-version
+   npm version 0.5.0 --workspace @embroider-design/app --no-git-tag-version
    ```
 
    Keep the root `package.json` in step by hand if you want them to match; only
-   the app's version is used for update comparisons.
+   the app's version is used for update comparisons. The workflow fails the
+   build if the tag and that field disagree, because a release whose version
+   does not match is one no installed copy will ever offer.
 
-2. **Build and publish** with a token that can write releases on the repo:
+2. **Commit, tag and push:**
 
    ```powershell
-   $env:GH_TOKEN = "<a token with repo scope>"
-   npm run build
-   npm run package -w @embroider-design/app -- --publish always
+   git commit -am "Ship 0.5.0"
+   git push origin main
+   git tag v0.5.0
+   git push origin v0.5.0
    ```
 
-   That tags `v0.2.0` and uploads three things:
+   The tag is what starts the build. Pushing the commit alone releases nothing.
+
+3. **Watch it, and confirm it is live.** The build takes a few minutes:
+
+   ```powershell
+   gh run watch
+   gh release view v0.5.0
+   ```
+
+   The release must carry three assets:
 
    | File | Why it matters |
    |---|---|
-   | `Embroider-Design-0.2.0-setup.exe` | the installer users download |
+   | `Embroider-Design-0.5.0-setup.exe` | the installer users download |
    | `latest.yml` | **the file the updater reads** — version, filename, SHA-512 |
    | `*.blockmap` | lets the updater download only the changed parts |
 
@@ -54,10 +70,10 @@ restart. This document is how you make a release it can find.
    reporting that they are up to date. If you ever build the installer by hand
    and attach it to a release yourself, attach `latest.yml` too.
 
-3. **Confirm it is live.** `releaseType: release` in `electron-builder.yml`
-   means the release is created already published rather than as a draft — the
-   default would be `draft`. Check it anyway, because the updater ignores drafts
-   and prereleases and the symptom is silence rather than an error:
+   `releaseType: release` in `electron-builder.yml` means the release is created
+   already published rather than as a draft — the default would be `draft`.
+   Check it anyway, because the updater ignores drafts and prereleases and the
+   symptom is silence rather than an error:
 
    ```powershell
    Invoke-RestMethod 'https://api.github.com/repos/atlas-navigate/embroider-design/releases/latest'
@@ -67,6 +83,24 @@ restart. This document is how you make a release it can find.
    `PATCH /repos/:owner/:repo/releases/:id` with `{"draft": false}`.
 
 Within 30 minutes every running copy will notice.
+
+`workflow_dispatch` runs the same build without publishing and attaches the
+installer to the run, which is how to check the pipeline still works without
+cutting a release.
+
+## The failure this workflow exists to prevent
+
+0.3.0 and 0.4.0 were both versioned, committed and built locally, and neither
+was ever uploaded. The releases page kept serving 0.2.0 while `main` was two
+minor versions ahead, so every download and every auto-update check got an app
+without rotation, without shape and icon deletion and without the icon-sheet
+importer — and nothing anywhere reported an error. `v0.4.0` was published by
+hand from the already-built artifacts on 2026-07-31; the tag-triggered workflow
+landed straight after so a version bump cannot silently fail to ship again.
+
+Two things make that failure quiet, and both are worth remembering: a missing
+release looks exactly like "no new version" to the updater, and the version in
+`package.json` is a claim about the code, not evidence that anyone shipped it.
 
 ## Never put a space in the artifact name
 
@@ -85,12 +119,32 @@ app silently never updates. `--publish always` happens to paper over this by
 uploading under the sanitized name; the manual path does not. A space-free
 `artifactName` makes all three identical, so both paths work.
 
-## If you would rather not use a token
+## Publishing by hand
 
-`npm run package` alone builds the installer into `packages/app/release/`
-without uploading anything. Attach `release/Embroider-Design-<version>-setup.exe`
-**and** `release/latest.yml` to a GitHub release manually — do not rename either
-file — and the result is identical from the updater's point of view.
+If CI is unavailable, or an installer is already sitting in
+`packages/app/release/` from a local `npm run package`, publish it directly.
+`gh` uses your own login, so no token has to be created or stored:
+
+```powershell
+gh release create v0.5.0 --target main --title "0.5.0" --notes-file notes.md `
+  "packages\app\release\Embroider-Design-0.5.0-setup.exe" `
+  "packages\app\release\Embroider-Design-0.5.0-setup.exe.blockmap" `
+  "packages\app\release\latest.yml"
+```
+
+`electron-builder --publish always` with `$env:GH_TOKEN` set to a token with
+`repo` scope does the same thing as part of a build.
+
+Either way: attach **`latest.yml`** as well as the installer, and **do not
+rename either file** — the result is then identical from the updater's point of
+view. Verify afterwards that the published `latest.yml`'s `sha512` matches the
+installer you uploaded, since that is the check `electron-updater` rejects a
+download over:
+
+```powershell
+$h = Get-FileHash -Algorithm SHA512 packages\app\release\Embroider-Design-0.5.0-setup.exe
+[Convert]::ToBase64String(([byte[]] -split ($h.Hash -replace '..', '0x$& ')))
+```
 
 ## Code signing
 
