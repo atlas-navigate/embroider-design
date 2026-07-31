@@ -147,6 +147,189 @@ export function leaf(cx: number, top: number, w: number, h: number): string {
   );
 }
 
+/**
+ * A plump body.
+ *
+ * `bulge` 0 is an ellipse; 1 pushes the widest point below centre and narrows
+ * the shoulders, giving something that sits on its base. Nearly every animal,
+ * egg, acorn and ghost in the catalogue is one of these, and drawing them from
+ * one function is what stops a squirrel and a bunny reading as different hands.
+ */
+export function blob(cx: number, top: number, w: number, h: number, bulge = 0.5): string {
+  const half = w / 2;
+  const upper = h * (0.5 + 0.2 * bulge); // top down to the widest point
+  const lower = h - upper;
+  const my = top + upper;
+  const bottom = top + h;
+  // Narrower shoulders as the bulge grows: the whole point is that the mass
+  // is low, and an ellipse with a low waist but full shoulders reads as a pear.
+  const kTopX = half * KAPPA * (1 - 0.3 * bulge);
+  const kBotX = half * KAPPA;
+  const kUpY = upper * KAPPA;
+  const kLoY = lower * KAPPA;
+  return (
+    `M ${n(cx)} ${n(top)} ` +
+    `C ${n(cx + kTopX)} ${n(top)} ${n(cx + half)} ${n(my - kUpY)} ${n(cx + half)} ${n(my)} ` +
+    `C ${n(cx + half)} ${n(my + kLoY)} ${n(cx + kBotX)} ${n(bottom)} ${n(cx)} ${n(bottom)} ` +
+    `C ${n(cx - kBotX)} ${n(bottom)} ${n(cx - half)} ${n(my + kLoY)} ${n(cx - half)} ${n(my)} ` +
+    `C ${n(cx - half)} ${n(my - kUpY)} ${n(cx - kTopX)} ${n(top)} ${n(cx)} ${n(top)} Z`
+  );
+}
+
+/**
+ * A rounded top on a square base. `shoulder` is the corner radius up top, and
+ * at `w / 2` the whole top is a half circle.
+ *
+ * Tombstones, gift lids, books, bells, tree tiers, lanterns, mailboxes.
+ */
+export function domeRect(x: number, y: number, w: number, h: number, shoulder: number): string {
+  const sh = Math.min(shoulder, w / 2, h);
+  const k = sh * (1 - KAPPA);
+  return (
+    `M ${n(x)} ${n(y + h)} L ${n(x)} ${n(y + sh)} ` +
+    `C ${n(x)} ${n(y + k)} ${n(x + k)} ${n(y)} ${n(x + sh)} ${n(y)} ` +
+    `L ${n(x + w - sh)} ${n(y)} ` +
+    `C ${n(x + w - k)} ${n(y)} ${n(x + w)} ${n(y + k)} ${n(x + w)} ${n(y + sh)} ` +
+    `L ${n(x + w)} ${n(y + h)} Z`
+  );
+}
+
+/** A point on a circle. */
+function at(cx: number, cy: number, r: number, angle: number): { x: number; y: number } {
+  return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+}
+
+/**
+ * Cubic control-point offset for an arc of `sweep` radians, as a multiple of
+ * the radius, measured along the tangent. The standard circle approximation:
+ * at a quarter turn it comes out to KAPPA.
+ */
+function arcK(sweep: number): number {
+  return (4 / 3) * Math.tan(sweep / 4);
+}
+
+/** Cubic segments along a circular arc, appended to an already-started path. */
+function arcTo(cx: number, cy: number, r: number, from: number, to: number): string {
+  // Split so no single cubic covers more than a quarter turn, where the
+  // approximation is good to about one part in a thousand.
+  const steps = Math.max(1, Math.ceil(Math.abs(to - from) / (Math.PI / 2)));
+  const step = (to - from) / steps;
+  const k = arcK(step) * r;
+  let out = '';
+  for (let i = 0; i < steps; i++) {
+    const a0 = from + step * i;
+    const a1 = a0 + step;
+    const p0 = at(cx, cy, r, a0);
+    const p1 = at(cx, cy, r, a1);
+    // Tangents are the radius turned a quarter turn in the direction of travel.
+    const c1 = { x: p0.x - Math.sin(a0) * k, y: p0.y + Math.cos(a0) * k };
+    const c2 = { x: p1.x + Math.sin(a1) * k, y: p1.y - Math.cos(a1) * k };
+    out += ` C ${n(c1.x)} ${n(c1.y)} ${n(c2.x)} ${n(c2.y)} ${n(p1.x)} ${n(p1.y)}`;
+  }
+  return out;
+}
+
+/**
+ * A lune — the lit edge of a round thing.
+ *
+ * Spans `arc` radians centred on `turn`, bulging out to `r` and back along a
+ * shallower inner curve, so it tapers to a point at both tips. The highlight on
+ * a bauble, an apple, a balloon; also a crescent moon at a wide enough arc.
+ */
+export function crescent(
+  cx: number,
+  cy: number,
+  r: number,
+  thickness: number,
+  turn = -Math.PI / 2,
+  arc = 2.2,
+): string {
+  const from = turn - arc / 2;
+  const to = turn + arc / 2;
+  const inner = Math.max(r - thickness, 0);
+  const start = at(cx, cy, r, from);
+  // The inner return runs on a circle pushed toward the tips, so the lune
+  // closes to a point rather than ending in two blunt little walls.
+  const push = (r - inner) / 2;
+  const ix = cx + Math.cos(turn) * push;
+  const iy = cy + Math.sin(turn) * push;
+  const innerR = r - push;
+  const innerFrom = Math.atan2(start.y - iy, start.x - ix);
+  const end = at(cx, cy, r, to);
+  const innerTo = Math.atan2(end.y - iy, end.x - ix);
+  return (
+    `M ${n(start.x)} ${n(start.y)}` +
+    arcTo(cx, cy, r, from, to) +
+    arcTo(ix, iy, innerR, innerTo, innerFrom) +
+    ' Z'
+  );
+}
+
+/**
+ * A box with one scalloped edge — `count` bumps along the bottom, or the top
+ * when `up` is set. Cake icing, cupcake frosting, a Santa hat's trim, pie
+ * crust, cloud bases.
+ */
+export function scallop(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  count: number,
+  up = false,
+): string {
+  const bumps = Math.max(1, Math.round(count));
+  const bw = w / bumps;
+  const r = bw / 2;
+  const edge = up ? y : y + h;
+  // 4/3 of the radius is the control offset that makes one cubic a half circle.
+  const reach = up ? edge - (r * 4) / 3 : edge + (r * 4) / 3;
+  let out = up
+    ? `M ${n(x)} ${n(y + h)} L ${n(x + w)} ${n(y + h)} L ${n(x + w)} ${n(edge)}`
+    : `M ${n(x)} ${n(y)} L ${n(x + w)} ${n(y)} L ${n(x + w)} ${n(edge)}`;
+  for (let i = bumps - 1; i >= 0; i--) {
+    const rightX = x + bw * (i + 1);
+    const leftX = x + bw * i;
+    out += ` C ${n(rightX)} ${n(reach)} ${n(leftX)} ${n(reach)} ${n(leftX)} ${n(edge)}`;
+  }
+  return `${out} Z`;
+}
+
+/**
+ * A closed ring of rounded lobes: wreath, sunflower, mane, dahlia, doily.
+ *
+ * Built as a rounded star — tips at `r + bump`, valleys at `r`, joined by
+ * cubics whose tangents run perpendicular to the radius, so the lobes meet
+ * smoothly instead of in the little spikes a straight-sided star gives.
+ */
+export function scallopRing(
+  cx: number,
+  cy: number,
+  r: number,
+  bump: number,
+  count: number,
+): string {
+  const lobes = Math.max(3, Math.round(count));
+  const step = Math.PI / lobes; // tip, valley, tip, valley...
+  const radiusAt = (i: number): number => (i % 2 === 0 ? r + bump : r);
+  const total = lobes * 2;
+  const start = at(cx, cy, radiusAt(0), -Math.PI / 2);
+  let out = `M ${n(start.x)} ${n(start.y)}`;
+  for (let i = 0; i < total; i++) {
+    const a0 = -Math.PI / 2 + step * i;
+    const a1 = a0 + step;
+    const r0 = radiusAt(i);
+    const r1 = radiusAt(i + 1);
+    const p0 = at(cx, cy, r0, a0);
+    const p1 = at(cx, cy, r1, a1);
+    const k = arcK(step);
+    const c1 = { x: p0.x - Math.sin(a0) * k * r0, y: p0.y + Math.cos(a0) * k * r0 };
+    const c2 = { x: p1.x + Math.sin(a1) * k * r1, y: p1.y - Math.cos(a1) * k * r1 };
+    out += ` C ${n(c1.x)} ${n(c1.y)} ${n(c2.x)} ${n(c2.y)} ${n(p1.x)} ${n(p1.y)}`;
+  }
+  return `${out} Z`;
+}
+
 /** Repeats a path-maker over a list of positions, joining the results. */
 export function repeat<T>(items: readonly T[], make: (item: T, index: number) => string): string {
   return items.map(make).join(' ');
