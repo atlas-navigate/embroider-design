@@ -19,6 +19,19 @@ extraResources:
     to: fonts
     filter:
       - '**/*'
+# Nothing here is a native module — react, react-dom, zustand, electron-updater
+# and @electron-toolkit/* are all pure JS — so there is no ABI to rebuild
+# against Electron, and the rebuild step is not merely redundant here, it is
+# destructive. When `packages/app/node_modules` does not exist, electron-builder
+# runs `npm install --production` in this directory (app-builder-lib's
+# installOrRebuild); npm resolves that against the workspace root and prunes
+# every dev dependency from the hoisted root `node_modules` — including
+# 7zip-bin, which electron-builder then needs a moment later and cannot find.
+# It only ever appeared to work locally because electron-vite leaves a `.vite`
+# cache in `packages/app/node_modules`, which makes the directory exist and
+# sends it down the harmless branch. A clean checkout has no such cache, which
+# is why this failed on CI and not on the machine that cut every release so far.
+npmRebuild: false
 win:
   target:
     - target: nsis
