@@ -72,6 +72,19 @@ shortcut is the answer. If you want to launch it from a terminal anyway:
 - Image import with automatic digitizing: colour quantization, background
   removal, despeckling, contour tracing, and per-region fill/satin generation,
   with a live preview of the trace before you commit it
+- **Import a whole sheet of icons at once.** Point it at a page of clip-art —
+  the kind sold as thirty little drawings in rows — and it finds each drawing,
+  cuts it out and rebuilds it as a proper multi-layer shape in your library,
+  filed under a collection you name. A contact sheet shows every icon it found
+  with a box round it, so you can see it got the right ones and click to leave
+  any out before committing. One slider joins an icon's scattered pieces or
+  splits neighbours that ran together, and there is a plain rows-and-columns
+  mode for pages it cannot read on its own
+- **Delete what you do not want.** Remove saved shapes one at a time or by the
+  selection, delete a whole collection when an import comes out wrong, and hide
+  the shipped icons you never use. Hidden icons stay installed and come back
+  whenever you ask — and deleting a saved shape never touches a design that
+  already used it, because designs carry their own copy of the geometry
 - Satin built from the shape's medial axis, so branching letters and tapering
   strokes come out as proper columns instead of thread dragged across the glyph
 - Underlay, fill density, fill angle, stitch length and pull compensation, per
