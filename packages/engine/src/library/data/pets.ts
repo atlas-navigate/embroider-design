@@ -1,20 +1,23 @@
 import type { LibraryShape } from '../types.js';
-import { circle, ellipse, ring } from './draw.js';
+import { blob, circle, ellipse, smoothClosed } from './draw.js';
+import { highlight, taper } from './detail.js';
+import { KEYLINE, circleBand, ellipseBand, polyPath, strokeBand } from './keyline.js';
+import { cuteFace } from './face.js';
 import {
-  BLUE_LIGHT,
+  BLUSH_LIGHT,
+  BROWN,
+  CHARCOAL,
   CREAM,
   CREAM_DARK,
   FUR,
   FUR_DARK,
   FUR_LIGHT,
   GOLD,
-  GOLD_DARK,
-  GREEN_DARK,
   INK,
-  INK_SOFT,
   ORANGE,
   ORANGE_DARK,
   ORANGE_LIGHT,
+  OUTLINE,
   PINK,
   RED,
   SILVER,
@@ -32,16 +35,163 @@ import {
  * here is therefore built ears-first, and the eyes sit low and wide rather than
  * centred — a centred eye reads as a doll, and a high one as a person.
  *
- * Muzzles, noses and eyes are cut out of the head as counter-rings *and* filled
- * by their own part. See the note at the top of `halloween.ts`: stitching a
+ * **One silhouette per icon.** The ears are part of the head's own contour
+ * rather than separate shapes behind it, so each animal has exactly one closed
+ * keyline band. That is not only tidier: two overlapping bands union into a
+ * pocket the compiler stitches as an extra hole, and an ear drawn as its own
+ * closed ring behind a head is the commonest way to get one. Colour patches
+ * underneath may overlap each other as freely as they like — only the dark
+ * part's geometry has to stay disciplined.
+ *
+ * Eyes and noses are cut out of the head as counter-rings *and* filled by the
+ * dark part, which is what `cuteFace` returns its `sockets` for. Stitching a
  * feature straight over a solid fill doubles the thread in that spot.
  */
 
-const DOG_FACE =
-  `${circle(36, 50, 6)} ${circle(64, 50, 6)} ` +
-  'M 50 62 C 56 62 60 65 60 69 C 60 73 56 76 50 76 C 44 76 40 73 40 69 C 40 65 44 62 50 62 Z';
+/** A dog's head, floppy ears included in the contour. */
+const DOG_HEAD: [number, number][] = [
+  [50, 10],
+  [64, 13],
+  [74, 22],
+  [76, 32],
+  [88, 34],
+  [94, 48],
+  [92, 64],
+  [82, 74],
+  [74, 70],
+  [70, 80],
+  [58, 88],
+  [42, 88],
+  [30, 80],
+  [26, 70],
+  [18, 74],
+  [8, 64],
+  [6, 48],
+  [12, 34],
+  [24, 32],
+  [26, 22],
+  [36, 13],
+];
 
-const CAT_FACE = `${ellipse(36, 52, 6, 8)} ${ellipse(64, 52, 6, 8)} M 50 66 L 57 72 L 50 78 L 43 72 Z`;
+/** A cat's head: the ears are corners of the same outline, not shapes on top. */
+const CAT_HEAD: [number, number][] = [
+  [50, 24],
+  [62, 22],
+  [76, 4],
+  [80, 30],
+  [88, 42],
+  [90, 58],
+  [82, 76],
+  [66, 88],
+  [50, 90],
+  [34, 88],
+  [18, 76],
+  [10, 58],
+  [12, 42],
+  [20, 30],
+  [24, 4],
+  [38, 22],
+];
+
+/** Body and tail as one outline — a fish is a single silhouette. */
+const FISH: [number, number][] = [
+  [58, 14],
+  [76, 20],
+  [90, 32],
+  [96, 46],
+  [90, 62],
+  [76, 76],
+  [58, 84],
+  [40, 84],
+  [26, 74],
+  [22, 60],
+  [8, 76],
+  [4, 50],
+  [8, 24],
+  [22, 40],
+  [26, 26],
+  [40, 16],
+];
+
+/**
+ * The birdhouse: gable and walls. The post is drawn separately rather than
+ * notched into this outline — a concave neck that deep does not survive being
+ * offset inward and then unioned, and the band came apart into three pieces
+ * with no cavity left between them.
+ */
+const HOUSE: [number, number][] = [
+  [50, 4],
+  [88, 36],
+  [82, 40],
+  [82, 84],
+  [18, 84],
+  [18, 40],
+  [12, 36],
+];
+
+/**
+ * A bone. The knobs need enough points to come out round — at four apiece the
+ * spline cut them into hexagons and the icon read as a dumbbell.
+ */
+const BONE: [number, number][] = [
+  [34, 42],
+  [32, 34],
+  [26, 29],
+  [18, 28],
+  [10, 32],
+  [5, 40],
+  [5, 48],
+  [5, 56],
+  [10, 64],
+  [18, 68],
+  [26, 67],
+  [32, 62],
+  [34, 54],
+  [66, 54],
+  [68, 62],
+  [74, 67],
+  [82, 68],
+  [90, 64],
+  [95, 56],
+  [95, 48],
+  [95, 40],
+  [90, 32],
+  [82, 28],
+  [74, 29],
+  [68, 34],
+  [66, 42],
+];
+
+/** Toes, splayed and tilted outward: four upright ovals in a row is not a paw. */
+const TOES: [number, number, number, number][] = [
+  [15, 42, 11, 15],
+  [37, 24, 12, 16],
+  [63, 24, 12, 16],
+  [85, 42, 11, 15],
+];
+
+/** A heel pad with three lobes at the bottom, which is what a real paw leaves. */
+const PAD: [number, number][] = [
+  [50, 48],
+  [66, 52],
+  [78, 64],
+  [79, 78],
+  [70, 88],
+  [60, 84],
+  [50, 88],
+  [40, 84],
+  [30, 88],
+  [21, 78],
+  [22, 64],
+  [34, 52],
+];
+
+const DOG_FACE = cuteFace(50, 44, 44, { smile: false, blush: false });
+const CAT_FACE = cuteFace(50, 50, 44, { smile: false, blush: false });
+
+/** A dog's nose and the two curves of its mouth, for the dark part. */
+const DOG_MUZZLE_INK =
+  `${ellipse(50, 62, 8, 6)} ${taper(50, 66, 41, 73, 2.6)} ${taper(50, 66, 59, 73, 2.6)}`;
 
 export const PET_SHAPES: LibraryShape[] = [
   {
@@ -51,24 +201,16 @@ export const PET_SHAPES: LibraryShape[] = [
     keywords: ['dog', 'cat', 'animal', 'track', 'foot', 'print'],
     parts: [
       {
-        name: 'Toes',
-        // Four toes, splayed and tilted outward. Four upright ovals in a row is
-        // the giveaway of a paw nobody looked at twice.
-        d:
-          'M 16 24 C 23 24 28 31 28 40 C 28 49 23 56 16 56 C 9 56 4 49 4 40 C 4 31 9 24 16 24 Z ' +
-          'M 37 8 C 44 8 49 15 49 24 C 49 33 44 40 37 40 C 30 40 25 33 25 24 C 25 15 30 8 37 8 Z ' +
-          'M 63 8 C 70 8 75 15 75 24 C 75 33 70 40 63 40 C 56 40 51 33 51 24 C 51 15 56 8 63 8 Z ' +
-          'M 84 24 C 91 24 96 31 96 40 C 96 49 91 56 84 56 C 77 56 72 49 72 40 C 72 31 77 24 84 24 Z',
-        color: INK,
+        name: 'Pad and toes',
+        d: `${smoothClosed(PAD)} ${TOES.map(([x, y, rx, ry]) => ellipse(x, y, rx, ry)).join(' ')}`,
+        color: BROWN,
       },
       {
-        name: 'Pad',
-        // A heart-shaped heel pad with three lobes at the bottom, which is what
-        // a real paw leaves and what an oval does not.
+        name: 'Outline',
         d:
-          'M 50 46 C 64 46 78 56 80 70 C 82 84 72 96 60 96 C 56 96 53 94 50 94 ' +
-          'C 47 94 44 96 40 96 C 28 96 18 84 20 70 C 22 56 36 46 50 46 Z',
-        color: INK,
+          `${strokeBand(PAD, KEYLINE, { closed: true, align: 'inside' })} ` +
+          `${TOES.map(([x, y, rx, ry]) => ellipseBand(x, y, rx, ry)).join(' ')}`,
+        color: OUTLINE,
       },
     ],
   },
@@ -78,51 +220,50 @@ export const PET_SHAPES: LibraryShape[] = [
     category: 'pets',
     keywords: ['dog', 'treat', 'chew', 'puppy', 'biscuit'],
     parts: [
-      {
-        name: 'Bone',
-        d:
-          'M 18 28 C 27 28 33 35 32 43 L 68 43 C 67 35 73 28 82 28 ' +
-          'C 92 28 100 36 100 47 C 100 58 92 66 82 66 C 73 66 67 59 68 51 ' +
-          'L 32 51 C 33 59 27 66 18 66 C 8 66 0 58 0 47 C 0 36 8 28 18 28 Z',
-        color: CREAM,
-      },
+      { name: 'Bone', d: smoothClosed(BONE), color: CREAM },
       {
         name: 'Shading',
-        d: 'M 82 28 C 92 28 100 36 100 47 C 100 58 92 66 82 66 C 88 60 90 54 90 47 C 90 40 88 34 82 28 Z',
+        d: smoothClosed([[66, 54], [68, 62], [74, 67], [82, 68], [90, 64], [95, 56], [95, 48], [95, 40], [90, 32], [82, 28], [74, 29], [68, 34], [66, 42], [72, 48]]),
         color: CREAM_DARK,
       },
-      { name: 'Shine', d: 'M 12 36 C 16 32 22 32 26 35 L 22 42 C 19 40 16 41 14 44 Z', color: WHITE },
+      { name: 'Shine', d: highlight(18, 48, 13, 1.5), color: WHITE },
+      {
+        name: 'Outline',
+        d: strokeBand(BONE, KEYLINE, { closed: true, align: 'inside' }),
+        color: OUTLINE,
+      },
     ],
   },
   {
     id: 'pets-dog',
     name: 'Dog',
     category: 'pets',
-    keywords: ['puppy', 'hound', 'canine', 'pet', 'beagle'],
+    keywords: ['puppy', 'hound', 'canine', 'pet', 'beagle', 'retriever'],
     parts: [
-      {
-        name: 'Ears',
-        // Long and hanging, framing the head. Ears that sit on top of the skull
-        // read as a cat however the muzzle is drawn.
-        d:
-          'M 20 22 C 30 20 36 28 36 42 C 36 58 32 72 22 76 C 10 80 2 68 2 50 C 2 34 8 24 20 22 Z ' +
-          'M 80 22 C 70 20 64 28 64 42 C 64 58 68 72 78 76 C 90 80 98 68 98 50 C 98 34 92 24 80 22 Z',
-        color: FUR_DARK,
-      },
+      // The head carries the sockets, so the dark part fills the eyes and nose
+      // rather than laying a second layer of thread over a solid fill.
       {
         name: 'Head',
-        d: `M 50 10 C 70 10 82 26 82 48 C 82 74 68 92 50 92 C 32 92 18 74 18 48 C 18 26 30 10 50 10 Z ${DOG_FACE}`,
+        d: `${smoothClosed(DOG_HEAD)} ${DOG_FACE.sockets} ${ellipse(50, 62, 8, 6)}`,
         color: FUR,
       },
       {
-        name: 'Muzzle',
-        d: 'M 50 56 C 62 56 70 64 70 74 C 70 84 62 92 50 92 C 38 92 30 84 30 74 C 30 64 38 56 50 56 Z',
-        color: FUR_LIGHT,
+        name: 'Ears',
+        // Drawn over the head, reaching the silhouette's edge on both sides.
+        // They may overlap whatever they like — they are colour, not shape.
+        d: `${ellipse(15, 52, 14, 22)} ${ellipse(85, 52, 14, 22)}`,
+        color: FUR_DARK,
       },
-      { name: 'Face', d: DOG_FACE, color: INK },
-      { name: 'Eye shine', d: `${circle(34, 47, 2.2)} ${circle(62, 47, 2.2)}`, color: WHITE },
-      { name: 'Mouth', d: 'M 48 76 L 52 76 L 52 84 L 48 84 Z M 38 82 C 44 88 56 88 62 82 L 64 86 C 56 94 44 94 36 86 Z', color: INK_SOFT },
-      { name: 'Tongue', d: 'M 44 88 C 44 86 56 86 56 88 L 56 94 C 56 98 44 98 44 94 Z', color: PINK },
+      { name: 'Muzzle', d: `${blob(50, 54, 38, 34, 0.3)} ${ellipse(50, 62, 8, 6)}`, color: FUR_LIGHT },
+      { name: 'Cheeks', d: cuteFace(50, 44, 44).blush, color: BLUSH_LIGHT },
+      { name: 'Tongue', d: 'M 44 74 C 44 72 56 72 56 74 L 56 82 C 56 86 44 86 44 82 Z', color: PINK },
+      {
+        name: 'Outline',
+        d:
+          `${strokeBand(DOG_HEAD, KEYLINE, { closed: true, align: 'inside' })} ` +
+          `${DOG_FACE.ink} ${DOG_MUZZLE_INK}`,
+        color: OUTLINE,
+      },
     ],
   },
   {
@@ -131,36 +272,32 @@ export const PET_SHAPES: LibraryShape[] = [
     category: 'pets',
     keywords: ['kitten', 'feline', 'kitty', 'pet', 'tabby'],
     parts: [
-      { name: 'Ears', d: 'M 26 34 L 18 6 L 46 22 Z M 74 34 L 82 6 L 54 22 Z', color: SILVER },
-      {
-        name: 'Head',
-        d: `M 50 14 C 74 14 88 32 88 56 C 88 78 72 94 50 94 C 28 94 12 78 12 56 C 12 32 26 14 50 14 Z ${CAT_FACE}`,
-        color: SILVER,
-      },
+      { name: 'Head', d: `${polyPath(CAT_HEAD)} ${CAT_FACE.sockets}`, color: SILVER },
       {
         name: 'Stripes',
         // A cat with no markings is a bald cat. Two on the brow and two on each
         // cheek is enough to say tabby without turning into a pattern.
         d:
-          'M 44 16 L 48 16 L 48 30 L 44 30 Z M 52 16 L 56 16 L 56 30 L 52 30 Z ' +
-          'M 12 48 L 28 52 L 28 56 L 12 52 Z M 12 60 L 28 62 L 28 66 L 12 64 Z ' +
-          'M 88 48 L 72 52 L 72 56 L 88 52 Z M 88 60 L 72 62 L 72 66 L 88 64 Z',
+          `${taper(44, 26, 42, 40, 4)} ${taper(56, 26, 58, 40, 4)} ` +
+          `${taper(14, 50, 30, 54, 4)} ${taper(15, 62, 31, 63, 4)} ` +
+          `${taper(86, 50, 70, 54, 4)} ${taper(85, 62, 69, 63, 4)}`,
         color: SILVER_DARK,
       },
-      { name: 'Face', d: CAT_FACE, color: INK },
-      // Ear linings and nose are the same pink and sew as one pass.
       {
         name: 'Ears and nose',
-        d: 'M 28 30 L 24 14 L 40 24 Z M 72 30 L 76 14 L 60 24 Z M 50 66 L 57 72 L 50 78 L 43 72 Z',
+        d: `${polyPath([[28, 14], [38, 26], [24, 26]])} ${polyPath([[72, 14], [76, 26], [62, 26]])} ${polyPath([[50, 62], [56, 68], [44, 68]])}`,
         color: PINK,
       },
+      { name: 'Cheeks', d: cuteFace(50, 50, 44).blush, color: BLUSH_LIGHT },
       {
-        name: 'Highlights',
+        name: 'Outline',
         d:
-          `${circle(34, 48, 2.2)} ${circle(62, 48, 2.2)} ` +
-          'M 2 68 L 26 72 L 26 75 L 2 71 Z M 2 80 L 26 78 L 26 81 L 2 83 Z ' +
-          'M 98 68 L 74 72 L 74 75 L 98 71 Z M 98 80 L 74 78 L 74 81 L 98 83 Z',
-        color: WHITE,
+          `${strokeBand(CAT_HEAD, KEYLINE, { closed: true, align: 'inside' })} ` +
+          `${CAT_FACE.ink} ` +
+          // Whiskers, kept clear of the band so they cannot bridge it.
+          `${taper(36, 66, 18, 62, 2)} ${taper(36, 70, 18, 74, 2)} ` +
+          `${taper(64, 66, 82, 62, 2)} ${taper(64, 70, 82, 74, 2)}`,
+        color: OUTLINE,
       },
     ],
   },
@@ -170,37 +307,29 @@ export const PET_SHAPES: LibraryShape[] = [
     category: 'pets',
     keywords: ['aquarium', 'goldfish', 'swim', 'tank', 'fins'],
     parts: [
+      { name: 'Fish', d: smoothClosed(FISH), color: ORANGE },
       {
-        name: 'Tail and fins',
-        d:
-          'M 22 50 C 12 40 4 26 2 10 C 18 16 30 28 36 42 Z ' +
-          'M 22 50 C 12 60 4 74 2 90 C 18 84 30 72 36 58 Z ' +
-          'M 56 24 C 62 14 70 8 78 6 C 78 16 74 26 68 32 Z ' +
-          'M 56 76 C 62 86 70 92 78 94 C 78 84 74 74 68 68 Z',
+        name: 'Tail',
+        d: polyPath([[26, 26], [22, 40], [8, 24], [4, 50], [8, 76], [22, 60], [26, 74], [30, 50]]),
         color: ORANGE_DARK,
-      },
-      {
-        name: 'Body',
-        d:
-          'M 62 18 C 80 24 94 36 98 50 C 94 64 80 76 62 82 ' +
-          'C 44 88 26 80 18 66 C 12 56 12 44 18 34 C 26 20 44 12 62 18 Z',
-        color: ORANGE,
       },
       {
         name: 'Scales',
         d:
-          'M 46 34 C 52 34 56 39 56 45 C 50 45 46 40 46 34 Z ' +
-          'M 62 30 C 68 30 72 35 72 41 C 66 41 62 36 62 30 Z ' +
-          'M 46 56 C 52 56 56 61 56 67 C 50 67 46 62 46 56 Z ' +
-          'M 62 60 C 68 60 72 65 72 71 C 66 71 62 66 62 60 Z ' +
-          'M 32 45 C 38 45 42 50 42 56 C 36 56 32 51 32 45 Z',
-        // Lit rather than shadowed, so the scales sew after the body instead of
-        // sending the machine back to the fin colour.
+          `${circle(52, 38, 7)} ${circle(66, 42, 7)} ${circle(52, 60, 7)} ` +
+          `${circle(66, 62, 7)} ${circle(42, 50, 7)}`,
         color: ORANGE_LIGHT,
       },
-      { name: 'Eye', d: circle(80, 42, 8), color: WHITE },
-      { name: 'Pupil', d: circle(82, 42, 4.5), color: INK },
-      { name: 'Bubbles', d: `${circle(94, 18, 5)} ${circle(88, 8, 3.5)}`, color: BLUE_LIGHT },
+      { name: 'Eye', d: circle(76, 40, 8), color: WHITE },
+      {
+        name: 'Outline',
+        d:
+          `${strokeBand(FISH, KEYLINE, { closed: true, align: 'inside' })} ` +
+          `${circle(78, 40, 4)} ` +
+          // The gill line: well inside the band at both ends.
+          `${taper(44, 24, 38, 44, 2.4)}`,
+        color: OUTLINE,
+      },
     ],
   },
   {
@@ -209,21 +338,26 @@ export const PET_SHAPES: LibraryShape[] = [
     category: 'pets',
     keywords: ['bird', 'nest', 'garden', 'home', 'box'],
     parts: [
+      { name: 'House', d: `${polyPath(HOUSE)} ${circle(50, 52, 12)}`, color: WOOD },
+      { name: 'Roof', d: polyPath([[50, 4], [88, 36], [82, 40], [50, 14], [18, 40], [12, 36]]), color: RED },
+      // Post and boards share the dark wood and are adjacent, so the machine
+      // changes to it once. The post abuts the wall rather than overlapping it.
+      { name: 'Post', d: polyPath([[44, 84], [56, 84], [56, 98], [44, 98]]), color: WOOD_DARK },
+      { name: 'Boards', d: `${taper(22, 70, 78, 70, 3)} ${taper(22, 78, 78, 78, 3)}`, color: WOOD_DARK },
       {
-        name: 'House',
-        d: 'M 50 2 L 94 38 L 84 38 L 84 84 L 16 84 L 16 38 L 6 38 Z M 50 40 C 59 40 66 47 66 56 C 66 65 59 72 50 72 C 41 72 34 65 34 56 C 34 47 41 40 50 40 Z',
-        color: WOOD,
+        name: 'Entrance',
+        // Charcoal rather than the keyline colour, and its own part. A solid
+        // disc inside the wall band belongs to neither the outline nor the
+        // wall: put it in the dark part and it is one more thing the compiler
+        // has to union against the band it sits inside.
+        d: circle(50, 52, 12),
+        color: CHARCOAL,
       },
       {
-        name: 'Roof',
-        d: 'M 50 2 L 94 38 L 84 38 L 50 10 L 16 38 L 6 38 Z',
-        color: RED,
+        name: 'Outline',
+        d: strokeBand(HOUSE, KEYLINE, { closed: true, align: 'inside' }),
+        color: OUTLINE,
       },
-      // Post, boards and perch are all the same dark wood and sew as one pass.
-      { name: 'Post', d: 'M 44 84 L 56 84 L 56 100 L 44 100 Z', color: WOOD_DARK },
-      { name: 'Boards', d: 'M 16 54 L 34 54 L 34 58 L 16 58 Z M 66 54 L 84 54 L 84 58 L 66 58 Z M 16 70 L 84 70 L 84 74 L 16 74 Z', color: WOOD_DARK },
-      { name: 'Perch', d: 'M 46 72 L 54 72 L 54 92 L 46 92 Z', color: WOOD_DARK },
-      { name: 'Hole shadow', d: circle(50, 56, 12), color: INK_SOFT },
     ],
   },
   {
@@ -232,17 +366,26 @@ export const PET_SHAPES: LibraryShape[] = [
     category: 'pets',
     keywords: ['name tag', 'id', 'dog', 'pet', 'buckle'],
     parts: [
-      { name: 'Collar', d: 'M 2 8 L 98 8 L 98 28 L 2 28 Z M 30 12 L 38 12 L 38 24 L 30 24 Z M 62 12 L 70 12 L 70 24 L 62 24 Z', color: RED },
-      { name: 'Stitching', d: 'M 2 12 L 98 12 L 98 14 L 2 14 Z M 2 22 L 98 22 L 98 24 L 2 24 Z', color: CREAM },
-      { name: 'Ring', d: ring(50, 38, 12, 6), color: SILVER },
-      { name: 'Tag', d: circle(50, 72, 26), color: GOLD },
-      { name: 'Tag rim', d: ring(50, 72, 26, 21), color: GOLD_DARK },
+      { name: 'Collar', d: polyPath([[2, 8], [98, 8], [98, 30], [2, 30]]), color: RED },
+      { name: 'Stitching', d: `${taper(6, 14, 94, 14, 2.5)} ${taper(6, 24, 94, 24, 2.5)}`, color: CREAM },
+      // The strap that hangs the tag, drawn before the tag so the tag covers
+      // its lower end. Colour only, and no band: a split ring drawn properly
+      // between the two crossed both of their bands, and two crossing bands
+      // union into a pocket that stitches as a hole nobody drew.
+      { name: 'Strap', d: polyPath([[45, 26], [55, 26], [55, 44], [45, 44]]), color: SILVER },
+      { name: 'Tag', d: circle(50, 64, 28), color: GOLD },
       {
         name: 'Bone mark',
-        d: 'M 38 66 C 41 66 43 68 43 71 L 57 71 C 57 68 59 66 62 66 C 66 66 68 69 68 72 C 68 76 66 78 62 78 C 59 78 57 76 57 73 L 43 73 C 43 76 41 78 38 78 C 34 78 32 76 32 72 C 32 69 34 66 38 66 Z',
+        d: smoothClosed([[38, 58], [43, 60], [57, 60], [62, 58], [66, 62], [62, 68], [57, 66], [43, 66], [38, 68], [34, 62]]),
         color: WHITE,
       },
-      { name: 'Grass', d: 'M 6 92 C 14 84 22 86 26 94 C 20 92 12 94 8 98 Z M 94 92 C 86 84 78 86 74 94 C 80 92 88 94 92 98 Z', color: GREEN_DARK },
+      {
+        name: 'Outline',
+        d:
+          `${strokeBand([[2, 8], [98, 8], [98, 30], [2, 30]], KEYLINE, { closed: true, align: 'inside' })} ` +
+          `${circleBand(50, 64, 28)}`,
+        color: INK,
+      },
     ],
   },
 ];

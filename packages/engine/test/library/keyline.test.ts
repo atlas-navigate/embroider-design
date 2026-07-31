@@ -14,7 +14,7 @@ import { OUTLINE, OUTLINE_COOL, OUTLINE_RED, INK } from '../../src/library/data/
  * not in the list is still in the old flat style and is deliberately exempt —
  * this file is how the redraw stays honest about how far it has actually got.
  */
-const REDRAWN: readonly CategoryId[] = ['thanksgiving'];
+const REDRAWN: readonly CategoryId[] = ['thanksgiving', 'pets'];
 
 /** The colours a keyline may be drawn in — see `keyline.ts`. */
 const KEYLINE_COLOURS = new Set([OUTLINE, OUTLINE_COOL, OUTLINE_RED, INK]);
