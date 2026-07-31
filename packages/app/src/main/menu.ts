@@ -28,6 +28,11 @@ export function buildMenu(getWindow: () => BrowserWindow | null): Menu {
         { label: 'Save as…', accelerator: 'CmdOrCtrl+Shift+S', click: send('save-as') },
         { type: 'separator' },
         { label: 'Import image…', accelerator: 'CmdOrCtrl+I', click: send('import-image') },
+        {
+          label: 'Import a sheet of icons…',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: send('import-icon-sheet'),
+        },
         { label: 'Open embroidery file…', click: send('import-embroidery') },
         { label: 'Add a font file…', click: send('add-font') },
         { type: 'separator' },

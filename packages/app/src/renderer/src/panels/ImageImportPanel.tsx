@@ -1,25 +1,45 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import {
   autoDigitizeImage,
   createImageTraceLayer,
+  libraryShapeFromImage,
   mergeSimilarColors,
   mmToUnits,
+  scanIconSheet,
+  sliceSheetGrid,
   threadToHex,
   unitsToMm,
   type AutoDigitizeResult,
+  type LibraryShape,
   type RgbaImage,
+  type SheetScan,
 } from '@embroider-design/engine';
 import { useDocumentStore } from '../state/document-store.js';
-import { CheckboxField, NumberField, PanelSection, SliderField } from '../components/controls.js';
+import { useCustomShapeStore } from '../state/custom-shape-store.js';
+import {
+  CheckboxField,
+  Field,
+  NumberField,
+  PanelSection,
+  SelectField,
+  SliderField,
+} from '../components/controls.js';
 
 /**
- * Image import and auto-digitizing.
+ * Image import: one design, or a sheet of icons.
  *
  * The renderer decodes the file — the engine takes raw RGBA and knows nothing
- * about PNG — and then every control here re-runs the trace so the user can
- * see what each one does. Colour count is the one that matters most: it is
+ * about PNG — and then every control here re-runs the work so the user can see
+ * what each one does. Colour count is the one that matters most: it is
  * literally the number of times they will have to rethread the machine.
+ *
+ * The two modes share this panel rather than getting a tab each. They share
+ * the decode, the busy and error handling, and every trace control; what
+ * differs is only whether the result becomes layers in the current design or
+ * shapes in the library.
  */
+
+export type ImageImportMode = 'design' | 'sheet';
 
 interface DecodedImage {
   name: string;
@@ -62,7 +82,52 @@ async function decodeImage(name: string, data: Uint8Array): Promise<DecodedImage
   };
 }
 
-export function ImageImportPanel(): JSX.Element {
+/** Strips the extension, so "autumn-icons.jpg" suggests "autumn-icons". */
+function baseNameOf(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '').trim() || 'Icon';
+}
+
+async function pickImage(): Promise<DecodedImage | null | 'unreadable'> {
+  const file = await window.embroider.openImage();
+  if (!file) return null;
+  return (await decodeImage(file.name, file.data)) ?? 'unreadable';
+}
+
+export function ImageImportPanel({
+  mode,
+  onModeChange,
+}: {
+  mode: ImageImportMode;
+  onModeChange(mode: ImageImportMode): void;
+}): JSX.Element {
+  return (
+    <>
+      <div className="segmented" role="tablist" aria-label="What the image is">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'design'}
+          className={mode === 'design' ? 'segment segment-active' : 'segment'}
+          onClick={() => onModeChange('design')}
+        >
+          One design
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'sheet'}
+          className={mode === 'sheet' ? 'segment segment-active' : 'segment'}
+          onClick={() => onModeChange('sheet')}
+        >
+          Sheet of icons
+        </button>
+      </div>
+      {mode === 'design' ? <DesignImport /> : <SheetImport />}
+    </>
+  );
+}
+
+function DesignImport(): JSX.Element {
   const addLayer = useDocumentStore((state) => state.addLayer);
   const hoop = useDocumentStore((state) => state.document.hoop);
   const layerCount = useDocumentStore((state) => state.document.layers.length);
@@ -81,15 +146,14 @@ export function ImageImportPanel(): JSX.Element {
   const previewRef = useRef<HTMLCanvasElement | null>(null);
 
   const pickFile = async (): Promise<void> => {
-    const file = await window.embroider.openImage();
-    if (!file) return;
-    setError(null);
-    const decoded = await decodeImage(file.name, file.data);
-    if (!decoded) {
+    const picked = await pickImage();
+    if (picked === null) return;
+    if (picked === 'unreadable') {
       setError('That image could not be read.');
       return;
     }
-    setSource(decoded);
+    setError(null);
+    setSource(picked);
   };
 
   const retrace = useCallback(() => {
@@ -269,6 +333,405 @@ export function ImageImportPanel(): JSX.Element {
                 </button>
               </>
             )}
+          </PanelSection>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Marks a new collection in the destination list, rather than an existing one. */
+const NEW_COLLECTION = ' new';
+
+function SheetImport(): JSX.Element {
+  const customShapes = useCustomShapeStore((state) => state.shapes);
+  const saveMany = useCustomShapeStore((state) => state.saveMany);
+
+  const [source, setSource] = useState<DecodedImage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const [detection, setDetection] = useState<'auto' | 'grid'>('auto');
+  const [rows, setRows] = useState(4);
+  const [columns, setColumns] = useState(4);
+  const [separation, setSeparation] = useState(2);
+  const [tolerance, setTolerance] = useState(28);
+  const [minSize, setMinSize] = useState(0.5);
+
+  const [colors, setColors] = useState(5);
+  const [smoothing, setSmoothing] = useState(1);
+  const [mergeSimilar, setMergeSimilar] = useState(true);
+
+  const [scan, setScan] = useState<SheetScan | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [excluded, setExcluded] = useState<ReadonlySet<number>>(new Set());
+
+  const [destination, setDestination] = useState<string>(NEW_COLLECTION);
+  const [newCollection, setNewCollection] = useState('');
+  const [baseName, setBaseName] = useState('Icon');
+  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
+
+  const contactRef = useRef<HTMLCanvasElement | null>(null);
+
+  const collections = useMemo(() => {
+    const names = new Set<string>();
+    for (const shape of customShapes) if (shape.collection) names.add(shape.collection);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [customShapes]);
+
+  const pickFile = async (): Promise<void> => {
+    const picked = await pickImage();
+    if (picked === null) return;
+    if (picked === 'unreadable') {
+      setError('That image could not be read.');
+      return;
+    }
+    setError(null);
+    setStatus(null);
+    setSource(picked);
+    setExcluded(new Set());
+    setBaseName(baseNameOf(picked.name));
+    if (!newCollection.trim()) setNewCollection(baseNameOf(picked.name));
+  };
+
+  // Re-scan whenever anything that changes where the cuts fall changes. The
+  // trace settings deliberately are *not* in here: they affect what each icon
+  // looks like, not how many there are, and re-scanning on them would make the
+  // contact sheet flicker for no reason.
+  useEffect(() => {
+    if (!source) {
+      setScan(null);
+      return;
+    }
+    setScanning(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      try {
+        const options = {
+          separation,
+          backgroundTolerance: tolerance,
+          minCellShare: minSize / 100,
+        };
+        const found =
+          detection === 'grid'
+            ? sliceSheetGrid(source.image, rows, columns, options)
+            : scanIconSheet(source.image, options);
+        if (cancelled) return;
+        setScan(found);
+        setExcluded(new Set());
+        setError(null);
+      } catch (caught) {
+        if (cancelled) return;
+        setScan(null);
+        setError(caught instanceof Error ? caught.message : 'That sheet could not be read');
+      } finally {
+        if (!cancelled) setScanning(false);
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [source, detection, rows, columns, separation, tolerance, minSize]);
+
+  // The contact sheet: the page with every cell boxed and numbered. This is the
+  // checkpoint — "found twelve" and "found the right twelve" are different
+  // claims, and only looking at it separates them.
+  useEffect(() => {
+    const canvas = contactRef.current;
+    if (!canvas || !scan || !source) return;
+
+    const image = new Image();
+    image.onload = () => {
+      const width = canvas.clientWidth;
+      const height = Math.round((width * scan.height) / Math.max(1, scan.width));
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = width * ratio;
+      canvas.height = height * ratio;
+      canvas.style.height = `${height}px`;
+
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      const scale = width / scan.width;
+      context.lineWidth = 1.5;
+      context.font = '10px system-ui, sans-serif';
+      context.textBaseline = 'top';
+      for (const cell of scan.cells) {
+        const off = excluded.has(cell.index);
+        const x = cell.box.minX * scale;
+        const y = cell.box.minY * scale;
+        const w = (cell.box.maxX - cell.box.minX) * scale;
+        const h = (cell.box.maxY - cell.box.minY) * scale;
+        if (off) {
+          context.fillStyle = 'rgba(12, 14, 18, 0.6)';
+          context.fillRect(x, y, w, h);
+        }
+        context.strokeStyle = off ? '#8a8f98' : '#4da3ff';
+        context.strokeRect(x, y, w, h);
+        context.fillStyle = off ? '#8a8f98' : '#4da3ff';
+        context.fillText(String(cell.index + 1), x + 2, y + 2);
+      }
+    };
+    image.src = source.dataUrl;
+  }, [scan, source, excluded]);
+
+  const toggleCell = (event: MouseEvent<HTMLCanvasElement>): void => {
+    const canvas = contactRef.current;
+    if (!canvas || !scan) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * scan.width;
+    const y = ((event.clientY - rect.top) / rect.height) * scan.height;
+    // Last match wins, so a small cell drawn inside a larger one is reachable.
+    const hit = [...scan.cells]
+      .reverse()
+      .find(
+        (cell) =>
+          x >= cell.box.minX && x < cell.box.maxX && y >= cell.box.minY && y < cell.box.maxY,
+      );
+    if (!hit) return;
+    setExcluded((current) => {
+      const next = new Set(current);
+      if (next.has(hit.index)) next.delete(hit.index);
+      else next.add(hit.index);
+      return next;
+    });
+  };
+
+  const included = useMemo(
+    () => (scan ? scan.cells.filter((cell) => !excluded.has(cell.index)) : []),
+    [scan, excluded],
+  );
+
+  const targetCollection =
+    destination === NEW_COLLECTION ? newCollection.trim() : destination;
+
+  const runImport = async (): Promise<void> => {
+    if (included.length === 0) return;
+    setImporting({ done: 0, total: included.length });
+    setStatus(null);
+    setError(null);
+
+    const shapes: LibraryShape[] = [];
+    let skipped = 0;
+    for (let i = 0; i < included.length; i++) {
+      // One icon per turn of the event loop. A sheet of thirty is thirty full
+      // traces, and doing them in one synchronous run freezes the window with
+      // no sign of progress.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      try {
+        const shape = libraryShapeFromImage(included[i].image, {
+          name: `${baseName.trim() || 'Icon'} ${i + 1}`,
+          colors,
+          smoothing,
+          mergeSimilar,
+          ...(targetCollection ? { collection: targetCollection } : {}),
+        });
+        if (shape) shapes.push(shape);
+        else skipped++;
+      } catch {
+        skipped++;
+      }
+      setImporting({ done: i + 1, total: included.length });
+    }
+
+    const ok = await saveMany(shapes);
+    setImporting(null);
+    if (!ok) {
+      setError('Those icons could not be saved to your library.');
+      return;
+    }
+    setStatus(
+      `Added ${shapes.length} icon${shapes.length === 1 ? '' : 's'}` +
+        (targetCollection ? ` to “${targetCollection}”` : '') +
+        (skipped > 0 ? ` · ${skipped} had nothing to trace` : '') +
+        '. They are in the Shapes tab.',
+    );
+  };
+
+  return (
+    <>
+      <PanelSection title="Import a sheet of icons">
+        <p className="muted small">
+          A page of separate drawings, cut apart and added to your shape library one icon at a
+          time. Flat line art with a plain background works best.
+        </p>
+        <button type="button" className="primary" onClick={() => void pickFile()}>
+          Choose a sheet…
+        </button>
+        {source && <p className="muted small">{source.name}</p>}
+        {error && <p className="warn small">{error}</p>}
+      </PanelSection>
+
+      {source && (
+        <>
+          <PanelSection title="Finding the icons">
+            <div className="segmented segmented-small">
+              <button
+                type="button"
+                className={detection === 'auto' ? 'segment segment-active' : 'segment'}
+                onClick={() => setDetection('auto')}
+              >
+                Auto-detect
+              </button>
+              <button
+                type="button"
+                className={detection === 'grid' ? 'segment segment-active' : 'segment'}
+                onClick={() => setDetection('grid')}
+              >
+                Grid
+              </button>
+            </div>
+
+            {detection === 'grid' ? (
+              <>
+                <NumberField
+                  label="Rows"
+                  value={rows}
+                  min={1}
+                  max={20}
+                  step={1}
+                  decimals={0}
+                  onChange={setRows}
+                />
+                <NumberField
+                  label="Columns"
+                  value={columns}
+                  min={1}
+                  max={20}
+                  step={1}
+                  decimals={0}
+                  onChange={setColumns}
+                />
+              </>
+            ) : (
+              <SliderField
+                label="Separation"
+                hint="Raise it to join one icon's pieces, lower it to split neighbours apart"
+                value={separation}
+                min={0}
+                max={8}
+                step={1}
+                onChange={setSeparation}
+              />
+            )}
+            <SliderField
+              label="Background tolerance"
+              hint="How different from the page a pixel must be to count as drawing"
+              value={tolerance}
+              min={6}
+              max={90}
+              step={2}
+              onChange={setTolerance}
+            />
+            <SliderField
+              label="Smallest icon"
+              hint="Share of the page below which a mark is a speck"
+              value={minSize}
+              min={0.02}
+              max={4}
+              step={0.02}
+              format={(value) => `${value.toFixed(2)}%`}
+              onChange={setMinSize}
+            />
+          </PanelSection>
+
+          <PanelSection title="What was found">
+            {scanning && <p className="muted small">Looking…</p>}
+            <canvas
+              ref={contactRef}
+              className="trace-preview contact-sheet"
+              onClick={toggleCell}
+            />
+            <p className="muted small">
+              {scan
+                ? `${included.length} of ${scan.cells.length} icon${scan.cells.length === 1 ? '' : 's'} selected`
+                : 'Nothing found yet'}
+              . Click one to leave it out.
+            </p>
+            {scan && scan.cells.length === 0 && (
+              <p className="warn small">
+                No icons found. Try a lower background tolerance, or switch to Grid and give it
+                the rows and columns.
+              </p>
+            )}
+          </PanelSection>
+
+          <PanelSection title="How each icon is traced">
+            <SliderField
+              label="Colours"
+              hint="One thread change each"
+              value={colors}
+              min={2}
+              max={8}
+              step={1}
+              onChange={setColors}
+            />
+            <SliderField
+              label="Smoothing"
+              hint="Raise it for a scanned or heavily compressed sheet"
+              value={smoothing}
+              min={0}
+              max={3}
+              step={1}
+              onChange={setSmoothing}
+            />
+            <CheckboxField
+              label="Merge near-identical colours"
+              hint="Saves a thread change for no visible loss"
+              checked={mergeSimilar}
+              onChange={setMergeSimilar}
+            />
+          </PanelSection>
+
+          <PanelSection title="Where they go">
+            <SelectField
+              label="Collection"
+              value={destination}
+              options={[
+                ...collections.map((name) => ({ value: name, label: name })),
+                { value: NEW_COLLECTION, label: 'New collection…' },
+              ]}
+              onChange={setDestination}
+            />
+            {destination === NEW_COLLECTION && (
+              <Field label="Name it">
+                <input
+                  type="text"
+                  value={newCollection}
+                  maxLength={40}
+                  placeholder="Autumn"
+                  onChange={(event) => setNewCollection(event.target.value)}
+                />
+              </Field>
+            )}
+            <Field label="Icon names">
+              <input
+                type="text"
+                value={baseName}
+                onChange={(event) => setBaseName(event.target.value)}
+              />
+            </Field>
+            <p className="muted small">
+              Numbered as you go — “{baseName.trim() || 'Icon'} 1”, “{baseName.trim() || 'Icon'} 2”
+              — and renameable afterwards in the Shapes tab.
+            </p>
+
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void runImport()}
+              disabled={included.length === 0 || importing !== null}
+            >
+              {importing
+                ? `Tracing ${importing.done} of ${importing.total}…`
+                : `Add ${included.length} icon${included.length === 1 ? '' : 's'}` +
+                  (targetCollection ? ` to “${targetCollection}”` : '')}
+            </button>
+            {status && <p className="muted small">{status}</p>}
           </PanelSection>
         </>
       )}

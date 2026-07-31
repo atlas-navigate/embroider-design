@@ -28,6 +28,8 @@ interface CustomShapeState {
 
   load(): Promise<void>;
   save(shape: LibraryShape): Promise<boolean>;
+  /** Adds a whole batch in one write — see the note on `persist`. */
+  saveMany(shapes: readonly LibraryShape[]): Promise<boolean>;
   remove(id: string): Promise<boolean>;
   rename(id: string, name: string): Promise<boolean>;
   shapeById(id: string): LibraryShape | null;
@@ -69,6 +71,21 @@ export const useCustomShapeStore = create<CustomShapeState>((set, get) => {
       // "update this shape" has to mean.
       const existing = get().shapes.filter((entry) => entry.id !== shape.id);
       return persist([...existing, shape]);
+    },
+
+    /**
+     * One write for the whole batch, rather than `save` in a loop.
+     *
+     * Importing a sheet adds thirty shapes at once. Thirty calls to `save`
+     * would be thirty IPC round trips each rewriting the entire library, and a
+     * failure at the twentieth would leave two thirds of a sheet on disk with
+     * nothing to say so.
+     */
+    saveMany: async (shapes) => {
+      if (shapes.length === 0) return true;
+      const incoming = new Set(shapes.map((shape) => shape.id));
+      const existing = get().shapes.filter((entry) => !incoming.has(entry.id));
+      return persist([...existing, ...shapes]);
     },
 
     remove: async (id) => persist(get().shapes.filter((shape) => shape.id !== id)),

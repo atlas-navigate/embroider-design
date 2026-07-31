@@ -25,7 +25,7 @@ import { StitchPreview } from './canvas/StitchPreview.js';
 import { LayerPanel } from './panels/LayerPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { ShapesPanel } from './panels/ShapesPanel.js';
-import { ImageImportPanel } from './panels/ImageImportPanel.js';
+import { ImageImportPanel, type ImageImportMode } from './panels/ImageImportPanel.js';
 import { HoopPanel } from './panels/HoopPanel.js';
 import { ExportPanel } from './panels/ExportPanel.js';
 import { UpdateBanner, updateStatusLabel, useUpdateState } from './components/UpdateBanner.js';
@@ -89,6 +89,9 @@ export function App(): JSX.Element {
   const update = useUpdateState();
   const [tab, setTab] = useState<PanelTab>('layers');
   const [status, setStatus] = useState<string | null>(null);
+  // Owned here rather than inside the panel, so the two menu items can each
+  // open the Image tab in the mode they name.
+  const [imageMode, setImageMode] = useState<ImageImportMode>('design');
 
   // Menu commands arrive asynchronously, so the handler is kept in a ref and
   // the IPC subscription is made once. Re-subscribing on every render would
@@ -203,6 +206,11 @@ export function App(): JSX.Element {
         void saveProject(true);
         return;
       case 'import-image':
+        setImageMode('design');
+        setTab('image');
+        return;
+      case 'import-icon-sheet':
+        setImageMode('sheet');
         setTab('image');
         return;
       case 'import-embroidery':
@@ -461,7 +469,9 @@ export function App(): JSX.Element {
             {tab === 'layers' && <LayerPanel compiled={result} />}
             {tab === 'properties' && <PropertiesPanel compiled={result} />}
             {tab === 'shapes' && <ShapesPanel />}
-            {tab === 'image' && <ImageImportPanel />}
+            {tab === 'image' && (
+              <ImageImportPanel mode={imageMode} onModeChange={setImageMode} />
+            )}
             {tab === 'hoop' && <HoopPanel compiled={result} />}
             {tab === 'export' && <ExportPanel compiled={result} />}
           </div>

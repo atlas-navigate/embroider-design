@@ -48,6 +48,7 @@ export type MenuCommand =
   | 'save'
   | 'save-as'
   | 'import-image'
+  | 'import-icon-sheet'
   | 'import-embroidery'
   | 'add-font'
   | 'export'

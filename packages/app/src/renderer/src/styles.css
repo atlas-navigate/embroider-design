@@ -809,6 +809,57 @@ textarea:focus {
 
 /* ---------- image tracing ---------- */
 
+/*
+ * A two-way switch for a mode, as opposed to the tab bar's six-way one.
+ *
+ * Both halves are always visible and always readable, which is the point: the
+ * Image panel does two quite different jobs, and a user who opened it looking
+ * for the sheet importer has to be able to see that it is there.
+ */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.segment {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.segment-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.segmented-small {
+  margin-bottom: 8px;
+}
+
+.segmented-small .segment {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+/* The page with every detected icon boxed. Clicking one leaves it out. */
+.contact-sheet {
+  cursor: pointer;
+}
+
 .trace-preview {
   width: 100%;
   display: block;
