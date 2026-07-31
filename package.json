@@ -1,7 +1,7 @@
 {
   "name": "embroider-design",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "End-to-end embroidery CAD software: design shapes, text and image-based auto-digitized embroidery patterns, and export machine-ready files (Brother PES, DST, EXP, JEF, VP3, XXX).",
   "license": "MIT",
   "workspaces": [

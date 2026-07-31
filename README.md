@@ -37,14 +37,25 @@ shortcut is the answer. If you want to launch it from a terminal anyway:
 
 ## Features
 
-- **A library of 202 shapes and icons** — the drawing shapes you would expect
+- **A library of 227 shapes and icons** — the drawing shapes you would expect
   from a presentation tool (basic shapes, block arrows, stars and banners,
   callouts, flowchart, equation) plus seasonal and thematic icons across
   Halloween, Christmas, Valentine's, weddings, Easter, Thanksgiving, patriotic,
-  birthdays, summer, school, pets, nautical and nature. Every outline is drawn
-  as an embroidery silhouette rather than clip art, and multi-part icons — a
-  snowman, a jack-o'-lantern, a pair of wedding rings — arrive as a **group**
-  with their colours already set
+  birthdays, summer, school, pets, nautical, nature and **Jewish holidays** —
+  a nine-branch chanukiah and a seven-branch Temple menorah both, dreidel,
+  shofar, seder plate, challah, hamsa and more. Every icon is built in layers
+  the way an embroiderer works — silhouette, shading, detail — so it reads as
+  an object at 40 mm rather than as a flat sticker, and multi-part icons (a
+  snowman, a jack-o'-lantern, a diamond ring) arrive as a **group** with their
+  colours already set and ordered so each thread is used once
+- **Curved and shaped text**, the way Canva does it: one Curve slider bends a
+  line into an arch, a bottom arc or a full circle, plus a wave. Letters are
+  rotated along the baseline rather than distorted, which is what keeps satin
+  columns an even width — so curved lettering stitches as cleanly as straight
+- **Cut, weld and hollow shapes into new ones**: union, subtract, intersect and
+  exclude any selection, hollow a shape to a wall thickness you set in mm, or
+  convert text to outlines and cut that. Save the result to **My shapes**, where
+  it stays across restarts and behaves like any other catalogue entry
 - Vector design canvas: rectangles, ellipses, stars, polygons, lines, freehand
   paths — draw, move, scale and rotate with live stitch regeneration
 - **Multi-select and grouping**: Ctrl+A selects everything, Ctrl-click and

@@ -13,6 +13,7 @@ fonts. No GPL-licensed code or assets are used anywhere in this project.
 | opentype.js | MIT | TrueType/OpenType font parsing, glyph outline extraction |
 | image-q | MIT | Color quantization for image auto-digitizing |
 | simplify-js | BSD-2-Clause | Polygon simplification of traced contours |
+| polygon-clipping | MIT | Boolean operations on shapes (weld, subtract, hollow, slice) |
 
 ## Build/dev tooling (not shipped in application logic)
 

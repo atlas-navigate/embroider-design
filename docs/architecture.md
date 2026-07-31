@@ -109,7 +109,9 @@ Two details that matter and are easy to get wrong:
 
 Text layers are digitized, not rendered as pre-made embroidery font glyphs.
 
-**No fonts are bundled.** `main/fonts.ts` enumerates `C:\Windows\Fonts` and
+A small cursive-heavy set ships with the app (`resources/fonts`, wired up in
+`electron-builder.yml`) because Windows itself has almost no script faces;
+everything else comes from the machine. `main/fonts.ts` enumerates `C:\Windows\Fonts` and
 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus any file the user adds by hand;
 `lettering/font-loader.ts` parses one with `opentype.js` when a layer needs it,
 and `lettering/font-catalog.ts` does the pure dedupe/group/search work over the
@@ -129,6 +131,69 @@ rasterising sample glyphs and taking width statistics from the distance
 transform. That is what drives the "will it stitch?" readout: choosing a font
 by how it looks on screen is how people end up with 0.4 mm strokes that vanish
 into the fabric.
+
+### Curved text
+
+`lettering/text-warp.ts` bends a laid-out line onto a parametric baseline. One
+`TextShape` union covers all of it — `arc` with a signed sweep in degrees,
+`wave`, an explicit `path`, or `none` — and everything reduces to a single
+primitive, `s → { point, tangent }`. The radius is *derived* from the laid-out
+line width (`R = width / |sweep|`), which is why dragging the Curve slider
+never changes the size of the text, and why ±360° closes a circle exactly.
+
+Glyphs are translated to their point on the baseline and **rotated** to the
+tangent. They are never distorted, for the same reason `library/instantiate.ts`
+refuses non-uniform scaling: squashing an axis turns a satin column's constant
+width into a varying one, and the router then makes different decisions along
+one stroke. Envelope warps (bulge, perspective, flag) are left out on that
+basis rather than left out by accident. Each glyph is placed by its **centre**
+along the arc and stepped back half an advance, so wide letters sit square
+instead of leaning.
+
+`shape` is additive on `TextLayer`, so the save format stays at schema version
+1: an old file loads unchanged, and a new one still opens in an old build,
+minus the curve. `document/serialization.ts` coerces it defensively — an
+unknown `type` or a non-finite number falls back to `{ type: 'none' }`.
+
+## Boolean shape editing and custom shapes
+
+`geometry/boolean.ts` wraps `polygon-clipping` (MIT, pure JS) for union,
+difference, intersection and exclusion. It is the one third-party geometry
+dependency, and the reasoning is in the module header: `offset.ts` fails
+softly — a bad inset is skipped and the shape sews without underlay — whereas
+a bad boolean hands back a plausible ring list that stitches the wrong thing
+and the user cannot tell. Subtracting a rectangle flush with the subject's own
+edge is an ordinary CAD request and precisely where hand-rolled clippers go
+wrong.
+
+Everything speaks the project's flat ring list. Nesting is not carried across
+the boundary: `groupRingsIntoRegions` recovers it on both sides, so holes,
+islands and counter-rings keep working with no new rules.
+`document/shape-ops.ts` builds the layer operations on top — combine, hollow,
+slice with a drawn knife, outline text — and `library/custom-shape.ts` turns a
+result back into a catalogue entry, stored as `custom-shapes.json` in
+`userData` exactly as the font catalog already is. Placed custom shapes are
+baked into the document as geometry, so an `.embd` opened on another machine
+still has the artwork: the personal library is a convenience, never a
+dependency of the file.
+
+### What counts as a hole
+
+`groupRingsIntoRegions` sorts a flat pile of rings by containment depth — even
+depth fills, odd depth is a hole. Containment is tested with a representative
+interior point **and** a bounding-box check, and the second half is not
+redundant. Artwork is drawn the way people draw: a cloud is three overlapping
+circles. The centre of a small circle lands inside a big one without the small
+one being a hole in it, and depth-by-interior-point alone therefore cuts a lobe
+straight out of the cloud. A real hole is *entirely* inside the ring it is cut
+from, so its box is inside that ring's box; overlapping blobs always break out
+of the box somewhere, and that is what tells the two apart.
+
+Overlap that survives all this is legal but wasteful — the seam sews twice in
+one thread, which is a ridge you can feel — so `compileShapeLayer` runs
+`mergeOverlappingRings` first, unioning a part's own regions into single areas.
+A bounding-box test short-circuits it, so the common case (a row of ruler
+ticks, a scatter of seeds) never reaches the clipper at all.
 
 ## Auto-digitizing (image import)
 
