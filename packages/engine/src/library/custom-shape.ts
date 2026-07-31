@@ -29,6 +29,20 @@ export const CUSTOM_LIBRARY_VERSION = 1;
 export interface CustomShapeLibrary {
   version: number;
   shapes: LibraryShape[];
+  /**
+   * Ids of shipped icons the user has put away.
+   *
+   * Hiding, not deleting: `CATALOGUE` is compiled into the bundle, so there is
+   * no file to remove and a reinstall would bring the icon back regardless.
+   * Saying "delete" for something that quietly comes back is worse than
+   * offering nothing, so the UI says hide and offers to undo it.
+   *
+   * It lives in this file rather than one of its own because it is the same
+   * kind of thing — a few hundred bytes of the user's opinion about their
+   * library — and a second file would mean a second IPC channel, a second read
+   * at startup and a second way for the two to disagree.
+   */
+  hidden: string[];
 }
 
 export function createCustomShapeId(): string {
@@ -152,22 +166,26 @@ function coerceShape(value: unknown): LibraryShape | null {
  * shutdown can truncate it, and losing one saved shape is a small annoyance
  * while an app that will not open its Shapes panel is a broken app.
  */
-export function parseCustomShapes(text: string | null | undefined): LibraryShape[] {
-  if (!text) return [];
+export function parseCustomLibrary(text: string | null | undefined): CustomShapeLibrary {
+  const empty: CustomShapeLibrary = {
+    version: CUSTOM_LIBRARY_VERSION,
+    shapes: [],
+    hidden: [],
+  };
+  if (!text) return empty;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return [];
+    return empty;
   }
-  if (typeof parsed !== 'object' || parsed === null) return [];
+  if (typeof parsed !== 'object' || parsed === null) return empty;
   const record = parsed as Record<string, unknown>;
-  if (Number(record.version ?? 0) > CUSTOM_LIBRARY_VERSION) return [];
-  if (!Array.isArray(record.shapes)) return [];
+  if (Number(record.version ?? 0) > CUSTOM_LIBRARY_VERSION) return empty;
 
   const shapes: LibraryShape[] = [];
   const seen = new Set<string>();
-  for (const entry of record.shapes) {
+  for (const entry of Array.isArray(record.shapes) ? record.shapes : []) {
     const shape = coerceShape(entry);
     // Two shapes sharing an id would make the lookup ambiguous and the delete
     // button remove the wrong one.
@@ -175,13 +193,38 @@ export function parseCustomShapes(text: string | null | undefined): LibraryShape
     seen.add(shape.id);
     shapes.push(shape);
   }
-  return shapes;
+
+  // Deduped, and unknown ids are kept rather than dropped: an id that matches
+  // nothing today is an icon from a version this one does not have, and
+  // discarding it would un-hide it the moment the user upgrades again.
+  const hidden = [
+    ...new Set(
+      (Array.isArray(record.hidden) ? record.hidden : []).filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      ),
+    ),
+  ];
+
+  return { version: CUSTOM_LIBRARY_VERSION, shapes, hidden };
+}
+
+/** The shapes alone, for callers with no interest in what is hidden. */
+export function parseCustomShapes(text: string | null | undefined): LibraryShape[] {
+  return parseCustomLibrary(text).shapes;
+}
+
+export function serializeCustomLibrary(library: CustomShapeLibrary, pretty = true): string {
+  const out: CustomShapeLibrary = {
+    version: CUSTOM_LIBRARY_VERSION,
+    shapes: library.shapes.map((shape) => ({ ...shape, category: 'custom' })),
+    hidden: [...new Set(library.hidden)],
+  };
+  return JSON.stringify(out, null, pretty ? 2 : 0);
 }
 
 export function serializeCustomShapes(shapes: readonly LibraryShape[], pretty = true): string {
-  const library: CustomShapeLibrary = {
-    version: CUSTOM_LIBRARY_VERSION,
-    shapes: shapes.map((shape) => ({ ...shape, category: 'custom' })),
-  };
-  return JSON.stringify(library, null, pretty ? 2 : 0);
+  return serializeCustomLibrary(
+    { version: CUSTOM_LIBRARY_VERSION, shapes: [...shapes], hidden: [] },
+    pretty,
+  );
 }

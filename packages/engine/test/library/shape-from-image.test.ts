@@ -170,8 +170,11 @@ describe('libraryShapeFromImage', () => {
   });
 });
 
-describe('collections survive the round trip', () => {
-  it('keeps the collection through serialize and parse', () => {
+describe('an imported shape stores like any other', () => {
+  it('keeps its collection through the library file', () => {
+    // The wider set of persistence cases lives in `custom-library.test.ts`;
+    // this one is here because it is the claim *this* module makes — that what
+    // it produces is storable without any special handling.
     const shape = libraryShapeFromImage(ringedDisc(), { name: 'Ring', collection: 'Autumn' });
     expect(shape).not.toBeNull();
     if (!shape) return;
@@ -179,42 +182,6 @@ describe('collections survive the round trip', () => {
     const [restored] = parseCustomShapes(serializeCustomShapes([shape]));
     expect(restored.collection).toBe('Autumn');
     expect(restored.name).toBe('Ring');
-  });
-
-  it('reads a library written before collections existed', () => {
-    const legacy = JSON.stringify({
-      version: 1,
-      shapes: [{ id: 'a', name: 'Old', parts: [{ name: 'P', d: 'M 0 0 L 10 0 L 10 10 Z' }] }],
-    });
-    const [restored] = parseCustomShapes(legacy);
-    expect(restored.collection).toBeUndefined();
-    expect(restored.name).toBe('Old');
-  });
-
-  it('drops a collection that is not a usable name', () => {
-    const odd = JSON.stringify({
-      version: 1,
-      shapes: [
-        { id: 'a', name: 'A', collection: 42, parts: [{ name: 'P', d: 'M 0 0 L 10 0 L 10 10 Z' }] },
-        { id: 'b', name: 'B', collection: '   ', parts: [{ name: 'P', d: 'M 0 0 L 10 0 L 10 10 Z' }] },
-      ],
-    });
-    for (const shape of parseCustomShapes(odd)) expect(shape.collection).toBeUndefined();
-  });
-
-  it('caps a collection name rather than letting it become the panel', () => {
-    const long = JSON.stringify({
-      version: 1,
-      shapes: [
-        {
-          id: 'a',
-          name: 'A',
-          collection: 'x'.repeat(500),
-          parts: [{ name: 'P', d: 'M 0 0 L 10 0 L 10 10 Z' }],
-        },
-      ],
-    });
-    const [restored] = parseCustomShapes(long);
-    expect(restored.collection?.length).toBeLessThanOrEqual(40);
+    expect(restored.parts).toHaveLength(shape.parts.length);
   });
 });

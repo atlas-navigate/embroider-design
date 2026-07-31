@@ -1048,6 +1048,26 @@ textarea:focus {
   padding: 0;
 }
 
+/*
+ * The row above the grid: "Select", or what can be done with a selection.
+ *
+ * It stays in the flow rather than floating over the grid, because the actions
+ * in it delete things and a control that overlaps what it acts on is a control
+ * people click by accident.
+ */
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.selection-bar .link {
+  padding: 0;
+}
+
 .shape-card {
   position: relative;
   display: flex;
