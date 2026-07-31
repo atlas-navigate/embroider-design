@@ -1,5 +1,6 @@
 export * from './point.js';
 export * from './transform.js';
+export * from './selection-frame.js';
 export * from './bezier.js';
 export * from './path.js';
 export * from './regions.js';

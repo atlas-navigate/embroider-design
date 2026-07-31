@@ -16,15 +16,14 @@ import {
   hoopSizeUnits,
   moveLayer as moveLayerIn,
   removeLayer as removeLayerFrom,
-  scaleAround,
   translation,
   updateLayer as updateLayerIn,
+  type AffineMatrix,
   type DesignDocument,
   type HoopOrientation,
   type HoopPreset,
   type Layer,
   type PartialStitchSettings,
-  type Point,
   type ShapeGeometry,
 } from '@embroider-design/engine';
 
@@ -110,7 +109,8 @@ interface DocumentState {
   removeSelection(): void;
   duplicateSelection(): void;
   moveSelectionBy(dx: number, dy: number): void;
-  scaleSelectionAround(factorX: number, factorY: number, pivot: Point): void;
+  captureSelectionTransforms(): Map<string, AffineMatrix>;
+  applyToSelection(originals: ReadonlyMap<string, AffineMatrix>, matrix: AffineMatrix): void;
 
   setPendingShape(shapeId: string | null): void;
   setTool(tool: ToolId): void;
@@ -399,19 +399,50 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     });
   },
 
-  scaleSelectionAround: (factorX, factorY, pivot) => {
+  /**
+   * The selected layers' transforms as they stand, for a drag to work from.
+   *
+   * Taken once when a gesture starts. Locked layers are left out, so the drag
+   * never has to re-check what it is allowed to touch.
+   */
+  captureSelectionTransforms: () => {
+    const state = get();
+    const originals = new Map<string, AffineMatrix>();
+    for (const id of state.selectedLayerIds) {
+      const layer = findLayer(state.document, id);
+      if (!layer || layer.locked) continue;
+      originals.set(id, { ...layer.transform });
+    }
+    return originals;
+  },
+
+  /**
+   * Re-applies a whole gesture to the transforms it started from.
+   *
+   * This **replaces** rather than accumulates: `matrix` is the transform for
+   * the entire drag so far, measured from the pointer-down snapshot, so calling
+   * this on every pointer move is idempotent for a stationary pointer.
+   *
+   * The alternative — composing a per-event delta onto whatever is there now —
+   * is what the resize drag used to do, and it requires re-measuring the
+   * selection between events. Measuring against a bounds that React had not yet
+   * re-rendered made every frame multiply the previous frame's error, so a
+   * slow drag outward accelerated away from the cursor. Working from a snapshot
+   * removes the need to measure mid-drag at all.
+   *
+   * One matrix for the whole selection, so a group keeps its proportions and
+   * its parts keep their positions relative to each other.
+   */
+  applyToSelection: (originals, matrix) => {
     set((state) => {
-      if (state.selectedLayerIds.length === 0) return {};
-      // One matrix for the whole selection, so a group keeps its proportions
-      // and its parts keep their positions relative to each other.
-      const matrix = scaleAround(factorX, factorY, pivot);
+      if (originals.size === 0) return {};
       let document = state.document;
-      for (const id of state.selectedLayerIds) {
+      for (const [id, original] of originals) {
         const layer = findLayer(document, id);
         if (!layer || layer.locked) continue;
         document = updateLayerIn(document, id, (current) => ({
           ...current,
-          transform: compose(current.transform, matrix),
+          transform: compose(original, matrix),
         }));
       }
       return { document, dirty: true };

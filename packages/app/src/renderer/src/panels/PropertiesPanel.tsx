@@ -1,19 +1,25 @@
+import { useCallback, useMemo } from 'react';
 import {
   compose,
   DEFAULT_STITCH_SETTINGS,
+  frameCentrePoint,
   mmToUnits,
   resolveStitchSettings,
   rotateAround,
+  rotation,
+  scaleAround,
   translation,
   unitsToMm,
+  type AffineMatrix,
   type CompileResult,
+  type EmbroideryFont,
   type Layer,
   type StitchType,
   type UnderlayType,
 } from '@embroider-design/engine';
 import { useDocumentStore } from '../state/document-store.js';
 import { useFontStore } from '../state/font-store.js';
-import { layerOutline, outlineBounds } from '../canvas/geometry.js';
+import { frameForLayers, layerOutline, outlineBounds } from '../canvas/geometry.js';
 import {
   CheckboxField,
   ColorField,
@@ -63,11 +69,44 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
   const updateLayer = useDocumentStore((state) => state.updateLayer);
   const updateLayerSettings = useDocumentStore((state) => state.updateLayerSettings);
   const setDocumentSettings = useDocumentStore((state) => state.setDocumentSettings);
+  const selectedLayerIds = useDocumentStore((state) => state.selectedLayerIds);
+  const captureSelectionTransforms = useDocumentStore((state) => state.captureSelectionTransforms);
+  const applyToSelection = useDocumentStore((state) => state.applyToSelection);
 
   const loadedFonts = useFontStore((state) => state.loaded);
   const entryFor = useFontStore((state) => state.entryFor);
 
   const layer = layers.find((entry) => entry.id === selectedLayerId) ?? null;
+
+  const fontFor = useCallback(
+    (target: Layer): EmbroideryFont | null => {
+      if (target.kind !== 'text') return null;
+      const entry = entryFor(target.font);
+      return entry ? (loadedFonts.get(entry.path) ?? null) : null;
+    },
+    [entryFor, loadedFonts],
+  );
+
+  const selection = useMemo(
+    () => layers.filter((entry) => selectedLayerIds.includes(entry.id)),
+    [layers, selectedLayerIds],
+  );
+
+  /**
+   * The whole selection's oriented frame, so this panel agrees with the canvas.
+   *
+   * Everything that changes the selection's size or angle goes through it.
+   * Rotating used to turn only the primary layer about its own centre, which
+   * meant a multi-selection came apart the moment anyone pressed a rotate
+   * button; and the size fields used to *read* the primary layer's upright
+   * bounding box while *writing* through the frame, so on a rotated layer the
+   * two disagreed by up to a factor of root two and typing back the number
+   * already shown would resize the layer.
+   *
+   * These hooks sit above the "nothing selected" return below because they have
+   * to: hooks cannot be called conditionally.
+   */
+  const frame = useMemo(() => frameForLayers(selection, fontFor), [selection, fontFor]);
 
   if (!layer) {
     const defaults = resolveStitchSettings(documentSettings);
@@ -134,14 +173,10 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
     underlay: { ...documentSettings.underlay, ...layer.settings.underlay },
   });
   const result = compiled?.layers.find((entry) => entry.layerId === layer.id);
-  const font = layer.kind === 'text' ? fontFor(layer) : null;
-  const bounds = outlineBounds(layerOutline(layer, font));
-
-  function fontFor(target: Layer): ReturnType<typeof loadedFonts.get> | null {
-    if (target.kind !== 'text') return null;
-    const entry = entryFor(target.font);
-    return entry ? (loadedFonts.get(entry.path) ?? null) : null;
-  }
+  // This one stays the *layer's* own upright box, deliberately: it labels that
+  // layer's compiled stitch count below, so it should describe that layer and
+  // not the selection frame around it.
+  const layerBounds = outlineBounds(layerOutline(layer, fontFor(layer)));
 
   const nudge = (dx: number, dy: number): void => {
     updateLayer(layer.id, (current) => ({
@@ -150,16 +185,35 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
     }));
   };
 
+  const transformSelection = (matrix: AffineMatrix): void => {
+    applyToSelection(captureSelectionTransforms(), matrix);
+  };
+
   const rotate = (degrees: number): void => {
-    if (!bounds) return;
-    const pivot = {
-      x: (bounds.minX + bounds.maxX) / 2,
-      y: (bounds.minY + bounds.maxY) / 2,
-    };
-    updateLayer(layer.id, (current) => ({
-      ...current,
-      transform: compose(current.transform, rotateAround((degrees * Math.PI) / 180, pivot)),
-    }));
+    if (!frame) return;
+    transformSelection(rotateAround((degrees * Math.PI) / 180, frameCentrePoint(frame)));
+  };
+
+  /** Sets one axis of the selection to an exact size in millimetres. */
+  const resizeTo = (axis: 'x' | 'y', mm: number): void => {
+    if (!frame || mm <= 0) return;
+    const width = frame.bounds.maxX - frame.bounds.minX;
+    const height = frame.bounds.maxY - frame.bounds.minY;
+    const span = axis === 'x' ? width : height;
+    if (span < 1e-6) return;
+    const factor = mmToUnits(mm) / span;
+    // Anchor the top-left of the frame, so typing a size grows the layer to the
+    // right and down rather than shifting it out from under the cursor.
+    const pivot = { x: frame.bounds.minX, y: frame.bounds.minY };
+    const scale = scaleAround(axis === 'x' ? factor : 1, axis === 'y' ? factor : 1, pivot);
+    transformSelection(compose(rotation(-frame.angle), scale, rotation(frame.angle)));
+  };
+
+  /** Turns the selection to an exact absolute angle. */
+  const setAngle = (degrees: number): void => {
+    if (!frame) return;
+    const target = (degrees * Math.PI) / 180;
+    transformSelection(rotateAround(target - frame.angle, frameCentrePoint(frame)));
   };
 
   return (
@@ -184,11 +238,11 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
         {result && !result.skipped && (
           <p className="muted small">
             {result.stitchCount.toLocaleString()} stitches
-            {bounds && (
+            {layerBounds && (
               <>
                 {' · '}
-                {unitsToMm(bounds.maxX - bounds.minX).toFixed(1)} x{' '}
-                {unitsToMm(bounds.maxY - bounds.minY).toFixed(1)} mm
+                {unitsToMm(layerBounds.maxX - layerBounds.minX).toFixed(1)} x{' '}
+                {unitsToMm(layerBounds.maxY - layerBounds.minY).toFixed(1)} mm
               </>
             )}
           </p>
@@ -228,9 +282,59 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
             Rotate 90°
           </button>
         </div>
+        {/*
+          Measured on the selection frame, which is what `resizeTo` writes
+          through — so typing back the number already shown is exactly a no-op,
+          at any rotation and for any number of selected layers.
+        */}
+        {frame && (
+          <>
+            <NumberField
+              label="Width"
+              unit="mm"
+              min={0.1}
+              step={0.5}
+              decimals={1}
+              value={unitsToMm(frame.bounds.maxX - frame.bounds.minX)}
+              onChange={(mm) => resizeTo('x', mm)}
+            />
+            <NumberField
+              label="Height"
+              unit="mm"
+              min={0.1}
+              step={0.5}
+              decimals={1}
+              value={unitsToMm(frame.bounds.maxY - frame.bounds.minY)}
+              onChange={(mm) => resizeTo('y', mm)}
+            />
+          </>
+        )}
+        {/*
+          Only for a single layer. Several layers have no one angle between
+          them, so the frame is upright by definition and an "absolute" field
+          over it would really be a relative one — type 45 twice and the
+          selection turns 90°. Better to have no field than a lying one.
+        */}
+        {frame && selection.length === 1 && (
+          <NumberField
+            label="Angle"
+            unit="°"
+            step={5}
+            decimals={1}
+            value={(frame.angle * 180) / Math.PI}
+            onChange={setAngle}
+          />
+        )}
+        {selection.length > 1 && (
+          <p className="muted small">
+            Several layers have no single angle between them, so there is nothing to set — the
+            rotate buttons turn the group about its centre.
+          </p>
+        )}
         <p className="muted small">
-          Drag on the canvas to move, drag a corner handle to resize. Hold Alt while resizing to
-          stretch one axis.
+          Drag to move; drag a side handle to change one dimension, a corner to change both, or the
+          round handle above to rotate. Shift keeps the proportions while resizing and snaps
+          rotation to 15°; Alt resizes about the centre.
         </p>
       </PanelSection>
 

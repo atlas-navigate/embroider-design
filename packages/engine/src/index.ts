@@ -38,6 +38,32 @@ export {
   scaling,
   translation,
 } from './geometry/transform.js';
+/**
+ * The selection frame, at the top level for the same reason as the transforms:
+ * it is the geometry behind dragging a handle, which is the single most common
+ * thing a user does, and the editor should not have to reach through
+ * `geometry.` for it on every pointer event.
+ */
+export {
+  RESIZE_HANDLES,
+  ROTATE_HANDLE_GAP,
+  cursorFor,
+  frameAngleOf,
+  frameCentre,
+  frameCentrePoint,
+  handleAtPoint,
+  handlePoint,
+  handlePointInFrame,
+  oppositeHandle,
+  rotateAngle,
+  rotateMatrix,
+  scaleMatrix,
+  selectionFrame,
+  type HandleId,
+  type RotateOptions,
+  type ScaleOptions,
+  type SelectionFrame,
+} from './geometry/selection-frame.js';
 export {
   boundingBoxCenter,
   boundingBoxHeight,

@@ -1,25 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  boundingBoxUnion,
   createTextLayer,
+  cursorFor,
   ellipse,
+  handleAtPoint,
   instantiateShape,
   mmToUnits,
   polyline,
   rectangle,
   regularPolygon,
+  rotateMatrix,
+  scaleMatrix,
   shapeById,
   star,
+  type AffineMatrix,
   type BoundingBox,
   type EmbroideryFont,
+  type HandleId,
   type Layer,
   type Point,
+  type SelectionFrame,
   type ShapeGeometry,
 } from '@embroider-design/engine';
 import { useDocumentStore, type ToolId } from '../state/document-store.js';
 import { useCustomShapeStore } from '../state/custom-shape-store.js';
 import { useFontStore } from '../state/font-store.js';
-import { hitTestOutline, layerOutline, oppositeHandle, outlineBounds } from './geometry.js';
+import {
+  cachedLayerOutline,
+  frameForLayers,
+  hitTestOutline,
+  layerOutline,
+  outlineBounds,
+} from './geometry.js';
 import {
   DARK_THEME,
   drawBaselineGuide,
@@ -30,8 +42,8 @@ import {
   drawSelection,
   drawSelectionMembers,
   HANDLE_SIZE,
+  rotateGapFor,
   toDocument,
-  toScreen,
 } from './render.js';
 
 /**
@@ -46,16 +58,34 @@ import {
  * multi-select needs it more than panning does.
  */
 
+/**
+ * A gesture in progress.
+ *
+ * `scale` and `rotate` both carry the frame the gesture started in and a
+ * snapshot of the transforms it started from, and neither is ever updated
+ * mid-drag. Each pointer move recomputes the whole gesture from that snapshot
+ * and replaces the layers' transforms outright. Composing a per-event delta
+ * instead requires re-measuring the selection between events, and re-measuring
+ * against a stale bounds is what made resizing accelerate away from the cursor.
+ */
 type DragMode =
   | { kind: 'none' }
   | { kind: 'pan'; startX: number; startY: number; panX: number; panY: number }
-  | { kind: 'move'; last: Point; moved: boolean }
-  | { kind: 'scale'; handle: number; bounds: BoundingBox }
+  | { kind: 'move'; last: Point }
+  | {
+      kind: 'scale';
+      handle: HandleId;
+      frame: SelectionFrame;
+      origins: Map<string, AffineMatrix>;
+    }
+  | { kind: 'rotate'; frame: SelectionFrame; from: Point; origins: Map<string, AffineMatrix> }
   | { kind: 'marquee'; start: Point; current: Point }
   | { kind: 'draw'; start: Point; current: Point }
   | { kind: 'freehand'; points: Point[] };
 
 const CLICK_TOLERANCE_PX = 6;
+/** Snap rotation to 15 degrees while Shift is held. */
+const ROTATE_SNAP = Math.PI / 12;
 const IDENTITY_MATRIX = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 /** A click with the library tool, rather than a drag, drops the shape this big. */
 const DEFAULT_LIBRARY_SIZE_MM = 40;
@@ -89,24 +119,52 @@ export function DesignCanvas(): JSX.Element {
   );
 
   const boundsOf = useCallback(
-    (layer: Layer): BoundingBox | null => outlineBounds(layerOutline(layer, fontForLayer(layer))),
+    (layer: Layer): BoundingBox | null =>
+      outlineBounds(cachedLayerOutline(layer, fontForLayer(layer))),
     [fontForLayer],
   );
 
-  /** Per-member boxes and their union, for drawing and for scale drags. */
-  const selectionBoxes = useCallback((): { boxes: BoundingBox[]; union: BoundingBox | null } => {
-    const ids = new Set(store.getState().selectedLayerIds);
+  /**
+   * The selected layers, in document order.
+   *
+   * Read from the store rather than from the `document` this component
+   * rendered with, so a caller in the middle of a gesture sees the current
+   * truth. The rendering path passes through here too and gets the same answer.
+   */
+  const selectedLayers = useCallback((): Layer[] => {
+    const state = store.getState();
+    const ids = new Set(state.selectedLayerIds);
+    return state.document.layers.filter((layer) => ids.has(layer.id));
+  }, [store]);
+
+  /** Per-member boxes, for outlining the members of a multi-selection. */
+  const selectionBoxes = useCallback((): BoundingBox[] => {
     const boxes: BoundingBox[] = [];
-    for (const layer of document.layers) {
-      if (!ids.has(layer.id)) continue;
+    for (const layer of selectedLayers()) {
       const box = boundsOf(layer);
       if (box) boxes.push(box);
     }
-    return { boxes, union: boxes.reduce<BoundingBox | null>(
-      (acc, box) => (acc ? boundingBoxUnion(acc, box) : box),
-      null,
-    ) };
-  }, [document, boundsOf, store]);
+    return boxes;
+  }, [selectedLayers, boundsOf]);
+
+  /**
+   * The oriented frame the selection is dragged by.
+   *
+   * Memoised rather than recomputed per call. It is read on every repaint *and*
+   * on every pointer move with no button held — that is what picks the hover
+   * cursor — and measuring it walks every selected layer's outline, which for
+   * text means extracting glyph contours from the font.
+   *
+   * Holding it across a gesture is safe because the scale and rotate maths reads
+   * `drag.frame`, the frame snapshotted at pointer-down, and never this one.
+   */
+  const currentFrame = useMemo((): SelectionFrame | null => {
+    const ids = new Set(selectedLayerIds);
+    return frameForLayers(
+      document.layers.filter((layer) => ids.has(layer.id)),
+      fontForLayer,
+    );
+  }, [document.layers, selectedLayerIds, fontForLayer]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -140,10 +198,9 @@ export function DesignCanvas(): JSX.Element {
       }
     }
 
-    const { boxes, union } = selectionBoxes();
-    if (union) {
-      drawSelectionMembers(context, view, boxes, DARK_THEME);
-      drawSelection(context, view, union, DARK_THEME);
+    if (currentFrame) {
+      drawSelectionMembers(context, view, selectionBoxes(), DARK_THEME);
+      drawSelection(context, view, currentFrame, DARK_THEME);
     }
 
     const drag = dragRef.current;
@@ -154,7 +211,7 @@ export function DesignCanvas(): JSX.Element {
     } else if (drag.kind === 'marquee') {
       drawMarquee(context, view, drag.start, drag.current, DARK_THEME);
     }
-  }, [document, view, showGrid, selectedLayerIds, tool, fontForLayer, selectionBoxes]);
+  }, [document, view, showGrid, selectedLayerIds, tool, fontForLayer, selectionBoxes, currentFrame]);
 
   useEffect(() => {
     draw();
@@ -165,6 +222,18 @@ export function DesignCanvas(): JSX.Element {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [draw]);
+
+  /*
+   * Clear a stale handle cursor when the selection or the tool changes.
+   *
+   * The hover cursor is only recomputed on pointer *move*, so deselecting with
+   * the keyboard while the pointer sits over a handle would otherwise leave a
+   * resize cursor over a canvas with nothing to resize.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas && canvas.style.cursor) canvas.style.cursor = '';
+  }, [tool, selectedLayerIds]);
 
   // Space held means the next drag pans, whatever tool is active.
   useEffect(() => {
@@ -201,20 +270,33 @@ export function DesignCanvas(): JSX.Element {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
-  const handleAt = (screen: Point, bounds: BoundingBox): number => {
-    const corners: Point[] = [
-      { x: bounds.minX, y: bounds.minY },
-      { x: bounds.maxX, y: bounds.minY },
-      { x: bounds.maxX, y: bounds.maxY },
-      { x: bounds.minX, y: bounds.maxY },
-    ];
-    for (let i = 0; i < corners.length; i++) {
-      const p = toScreen(view, corners[i]);
-      if (Math.abs(p.x - screen.x) <= HANDLE_SIZE && Math.abs(p.y - screen.y) <= HANDLE_SIZE) {
-        return i;
-      }
+  /**
+   * The handle under the pointer.
+   *
+   * The grab zone is half the drawn handle plus a couple of pixels of slack —
+   * it used to be a full `HANDLE_SIZE` either side, a box twice the size of the
+   * handle you can see, which meant clicks that visibly landed on the object
+   * started a resize instead of a move.
+   */
+  const handleAt = (point: Point, frame: SelectionFrame): HandleId | null =>
+    handleAtPoint(frame, point, (HANDLE_SIZE / 2 + 2) / view.zoom, rotateGapFor(view));
+
+  /**
+   * Shows what the handle under the pointer would do.
+   *
+   * Set on the element directly rather than through a class, because the answer
+   * depends on the selection's rotation — a turned object needs the cursor
+   * turned with it, and there is no fixed set of classes for that. Cleared back
+   * to the empty string so the tool's own cursor from the stylesheet takes over.
+   */
+  const updateHoverCursor = (canvas: HTMLCanvasElement, point: Point): void => {
+    if (tool !== 'select') {
+      if (canvas.style.cursor) canvas.style.cursor = '';
+      return;
     }
-    return -1;
+    const handle = currentFrame ? handleAt(point, currentFrame) : null;
+    const next = currentFrame && handle ? cursorFor(currentFrame, handle) : '';
+    if (canvas.style.cursor !== next) canvas.style.cursor = next;
   };
 
   const placeLibraryShape = (start: Point, end: Point): void => {
@@ -258,11 +340,20 @@ export function DesignCanvas(): JSX.Element {
     if (event.button !== 0) return;
 
     if (tool === 'select') {
-      const { union } = selectionBoxes();
-      if (union) {
-        const handle = handleAt(screen, union);
-        if (handle >= 0) {
-          dragRef.current = { kind: 'scale', handle, bounds: union };
+      if (currentFrame) {
+        const handle = handleAt(point, currentFrame);
+        if (handle) {
+          // Snapshot once. Everything from here re-derives the whole gesture
+          // from these transforms rather than stacking deltas onto them.
+          const origins = store.getState().captureSelectionTransforms();
+          if (handle === 'rotate') {
+            // `cursorFor` gives the rotate handle 'grab' on hover; the closed
+            // hand for the duration of the drag is what makes it feel grabbed.
+            event.currentTarget.style.cursor = 'grabbing';
+            dragRef.current = { kind: 'rotate', frame: currentFrame, from: point, origins };
+          } else {
+            dragRef.current = { kind: 'scale', handle, frame: currentFrame, origins };
+          }
           return;
         }
       }
@@ -272,7 +363,9 @@ export function DesignCanvas(): JSX.Element {
       for (let i = document.layers.length - 1; i >= 0; i--) {
         const layer = document.layers[i];
         if (!layer.visible || layer.locked) continue;
-        if (!hitTestOutline(layerOutline(layer, fontForLayer(layer)), point, tolerance)) continue;
+        if (!hitTestOutline(cachedLayerOutline(layer, fontForLayer(layer)), point, tolerance)) {
+          continue;
+        }
 
         const additive = event.ctrlKey || event.metaKey;
         const already = store.getState().selectedLayerIds.includes(layer.id);
@@ -281,7 +374,7 @@ export function DesignCanvas(): JSX.Element {
         if (!already || additive || event.shiftKey) {
           store.getState().selectLayer(layer.id, { additive, range: event.shiftKey });
         }
-        dragRef.current = { kind: 'move', last: point, moved: false };
+        dragRef.current = { kind: 'move', last: point };
         return;
       }
 
@@ -320,9 +413,13 @@ export function DesignCanvas(): JSX.Element {
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     const drag = dragRef.current;
-    if (drag.kind === 'none') return;
     const screen = pointerPosition(event);
     const point = toDocument(view, screen.x, screen.y);
+
+    if (drag.kind === 'none') {
+      updateHoverCursor(event.currentTarget, point);
+      return;
+    }
 
     switch (drag.kind) {
       case 'pan':
@@ -335,25 +432,31 @@ export function DesignCanvas(): JSX.Element {
         const dx = point.x - drag.last.x;
         const dy = point.y - drag.last.y;
         drag.last = point;
-        if (dx !== 0 || dy !== 0) drag.moved = true;
         store.getState().moveSelectionBy(dx, dy);
         return;
       }
       case 'scale': {
-        const pivot = oppositeHandle(drag.bounds, drag.handle);
-        const startWidth = drag.bounds.maxX - drag.bounds.minX;
-        const startHeight = drag.bounds.maxY - drag.bounds.minY;
-        if (startWidth < 1e-6 || startHeight < 1e-6) return;
-        const scaleX = Math.abs(point.x - pivot.x) / startWidth;
-        const scaleY = Math.abs(point.y - pivot.y) / startHeight;
-        // Uniform unless Alt is held: squashing a satin column is rarely wanted.
-        const uniform = Math.max(scaleX, scaleY);
-        const factorX = clampScale(event.altKey ? scaleX : uniform);
-        const factorY = clampScale(event.altKey ? scaleY : uniform);
-        store.getState().scaleSelectionAround(factorX, factorY, pivot);
-        // The transform has been applied, so measure the next move from here.
-        const next = selectionBoxes().union;
-        if (next) drag.bounds = next;
+        // Shift locks the aspect ratio, Alt pivots about the centre. Free on
+        // both axes otherwise: a corner drag follows the cursor exactly, which
+        // is what every other editor does. The old default was the reverse —
+        // uniform unless Alt — on the grounds that squashing a satin column is
+        // rarely wanted. It still is rarely wanted; Shift is now the way to say so.
+        store.getState().applyToSelection(
+          drag.origins,
+          scaleMatrix(drag.frame, drag.handle, point, {
+            lockAspect: event.shiftKey,
+            fromCentre: event.altKey,
+          }),
+        );
+        return;
+      }
+      case 'rotate': {
+        store.getState().applyToSelection(
+          drag.origins,
+          rotateMatrix(drag.frame, drag.from, point, {
+            snap: event.shiftKey ? ROTATE_SNAP : undefined,
+          }),
+        );
         return;
       }
       case 'marquee':
@@ -383,6 +486,8 @@ export function DesignCanvas(): JSX.Element {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    // Drop the grabbing hand; the next move re-derives the hover cursor.
+    if (drag.kind === 'rotate') event.currentTarget.style.cursor = '';
 
     if (drag.kind === 'draw') {
       if (tool === 'library') {
@@ -430,6 +535,19 @@ export function DesignCanvas(): JSX.Element {
     forceRender((n) => n + 1);
   };
 
+  /**
+   * Drops a handle cursor when the pointer leaves the canvas.
+   *
+   * Only when nothing is being dragged: a capture-driven drag legitimately
+   * continues outside the canvas, and clearing mid-gesture makes the cursor
+   * flicker back to the tool's own while the user is still resizing.
+   */
+  const onPointerLeave = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (dragRef.current.kind === 'none' && event.currentTarget.style.cursor) {
+      event.currentTarget.style.cursor = '';
+    }
+  };
+
   const onWheel = (event: React.WheelEvent<HTMLCanvasElement>): void => {
     const rect = event.currentTarget.getBoundingClientRect();
     store
@@ -450,6 +568,7 @@ export function DesignCanvas(): JSX.Element {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerLeave}
         onWheel={onWheel}
       />
       {tool === 'library' && pendingShapeId && (
@@ -459,10 +578,6 @@ export function DesignCanvas(): JSX.Element {
       )}
     </div>
   );
-}
-
-function clampScale(value: number): number {
-  return Math.max(0.02, Math.min(50, value));
 }
 
 function ghostPoints(tool: ToolId, start: Point, current: Point): Point[] {

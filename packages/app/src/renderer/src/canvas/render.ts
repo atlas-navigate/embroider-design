@@ -1,8 +1,10 @@
 import {
+  RESIZE_HANDLES,
   applyToPoint,
   baselineFor,
   compose,
   groupRingsIntoRegions,
+  handlePoint,
   hoopSizeUnits,
   layoutText,
   mmToUnits,
@@ -12,11 +14,13 @@ import {
   type BoundingBox,
   type DesignDocument,
   type EmbroideryFont,
+  type HandleId,
   type Layer,
   type Point,
+  type SelectionFrame,
 } from '@embroider-design/engine';
 import type { ViewTransform } from '../state/document-store.js';
-import { boundsHandles, layerOutline, outlineBounds } from './geometry.js';
+import { cachedLayerOutline, outlineBounds } from './geometry.js';
 
 /**
  * Canvas drawing.
@@ -27,6 +31,22 @@ import { boundsHandles, layerOutline, outlineBounds } from './geometry.js';
  */
 
 export const HANDLE_SIZE = 8;
+
+/**
+ * How far above the selection the rotate handle floats, in screen pixels.
+ *
+ * Screen pixels rather than document units, so the handle keeps the same
+ * comfortable distance from the box at every zoom. Comfortably more than
+ * `HANDLE_SIZE`, so it never overlaps the corner handles and steal their
+ * clicks — see `handleAtPoint`, which resolves that overlap in the corners'
+ * favour and would make rotate unreachable if the two ever collided.
+ */
+export const ROTATE_HANDLE_OFFSET_PX = 26;
+
+/** The rotate-handle gap in document units, which is what the frame maths wants. */
+export function rotateGapFor(view: ViewTransform): number {
+  return ROTATE_HANDLE_OFFSET_PX / view.zoom;
+}
 
 export interface CanvasTheme {
   background: string;
@@ -131,7 +151,7 @@ export function drawLayer(
   selected: boolean,
   font: EmbroideryFont | null = null,
 ): void {
-  const outline = layerOutline(layer, font);
+  const outline = cachedLayerOutline(layer, font);
   if (outline.rings.length === 0 && outline.paths.length === 0) return;
 
   const color = threadToHex(layer.thread);
@@ -173,34 +193,62 @@ export function drawLayer(
   context.restore();
 }
 
+/**
+ * The selection box, its eight resize handles and the rotate handle.
+ *
+ * The box is drawn from the frame's four corners rather than as a rect, because
+ * a frame belonging to a rotated layer is turned and `strokeRect` can only draw
+ * upright. The handles come from the same `handlePoint` the hit test uses, so
+ * what is drawn and what is grabbable cannot drift apart.
+ */
 export function drawSelection(
   context: CanvasRenderingContext2D,
   view: ViewTransform,
-  bounds: BoundingBox,
+  frame: SelectionFrame,
   theme: CanvasTheme,
 ): void {
-  const topLeft = toScreen(view, { x: bounds.minX, y: bounds.minY });
-  const bottomRight = toScreen(view, { x: bounds.maxX, y: bounds.maxY });
+  const at = (handle: HandleId): Point =>
+    toScreen(view, handlePoint(frame, handle, rotateGapFor(view)));
 
   context.save();
   context.strokeStyle = theme.selection;
   context.lineWidth = 1;
+
   context.setLineDash([4, 3]);
-  context.strokeRect(
-    topLeft.x + 0.5,
-    topLeft.y + 0.5,
-    bottomRight.x - topLeft.x,
-    bottomRight.y - topLeft.y,
-  );
+  context.beginPath();
+  const corners: HandleId[] = ['nw', 'ne', 'se', 'sw'];
+  corners.forEach((handle, index) => {
+    const p = at(handle);
+    if (index === 0) context.moveTo(p.x, p.y);
+    else context.lineTo(p.x, p.y);
+  });
+  context.closePath();
+  context.stroke();
   context.setLineDash([]);
 
-  for (const handle of boundsHandles(bounds)) {
-    const p = toScreen(view, handle);
-    context.fillStyle = theme.handle;
-    context.strokeStyle = theme.selection;
+  // The stem tying the rotate handle to the top edge, so it reads as belonging
+  // to the selection rather than floating near it.
+  const top = at('n');
+  const pivotEnd = at('rotate');
+  context.beginPath();
+  context.moveTo(top.x, top.y);
+  context.lineTo(pivotEnd.x, pivotEnd.y);
+  context.stroke();
+
+  context.fillStyle = theme.handle;
+  for (const handle of RESIZE_HANDLES) {
+    const p = at(handle);
     context.fillRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
     context.strokeRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
   }
+
+  // Round, so it is obvious at a glance that it does something other than the
+  // eight square ones.
+  context.beginPath();
+  context.arc(pivotEnd.x, pivotEnd.y, HANDLE_SIZE / 2 + 1, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
   context.restore();
 }
 
@@ -285,7 +333,7 @@ export function layerBounds(
   layer: Layer,
   font: EmbroideryFont | null = null,
 ): BoundingBox | null {
-  return outlineBounds(layerOutline(layer, font));
+  return outlineBounds(cachedLayerOutline(layer, font));
 }
 
 /** How finely the guide curve is sampled. Enough for a full circle to look round. */

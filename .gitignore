@@ -12,3 +12,6 @@ Thumbs.db
 .env.local
 coverage/
 packages/engine/catalogue*.svg
+# Reference sheets the icon redraw is drawn against. Third-party artwork, and
+# several megabytes of it — useful on disk, not something to carry in history.
+Icon styles/

@@ -364,6 +364,13 @@ button.danger:hover:not(:disabled) {
   overflow: hidden;
 }
 
+/*
+ * The select tool sets `style.cursor` on the element directly as the pointer
+ * moves over a handle, because the right cursor depends on how far the
+ * selection is rotated and there is no fixed set of classes for that. An inline
+ * style beats these rules, and the canvas clears it back to the empty string
+ * when the pointer leaves a handle so they take over again.
+ */
 .design-canvas {
   display: block;
   width: 100%;

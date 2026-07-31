@@ -3,8 +3,10 @@ import {
   boundingBoxOfMany,
   compose,
   distanceToPolyline,
+  frameAngleOf,
   pointInPolygon,
   regionToRings,
+  selectionFrame,
   shapeToOpenPaths,
   shapeToRings,
   textToRings,
@@ -13,6 +15,7 @@ import {
   type EmbroideryFont,
   type Layer,
   type Point,
+  type SelectionFrame,
   type TextLayer,
 } from '@embroider-design/engine';
 
@@ -85,6 +88,34 @@ export function layerOutline(layer: Layer, font: EmbroideryFont | null = null): 
   }
 }
 
+/**
+ * Outlines, cached on the layer object itself.
+ *
+ * Layers are replaced rather than mutated on every edit — the store spreads
+ * into a new object — so object identity is a sound cache key, and a `WeakMap`
+ * needs no eviction because a superseded layer becomes unreachable.
+ *
+ * Without this, measuring the selection frame re-extracts every selected text
+ * layer's glyph outlines from the font, and the frame is measured on every
+ * pointer move (to pick the hover cursor) as well as on every repaint. Typing
+ * into a long text layer and then moving the mouse was re-running `textToRings`
+ * hundreds of times a second for geometry that had not changed.
+ */
+const outlineCache = new WeakMap<Layer, { font: EmbroideryFont | null; outline: LayerOutline }>();
+
+export function cachedLayerOutline(
+  layer: Layer,
+  font: EmbroideryFont | null = null,
+): LayerOutline {
+  const hit = outlineCache.get(layer);
+  // Only text depends on the font, but comparing it for every kind is cheaper
+  // than branching on kind and getting the text case wrong later.
+  if (hit && hit.font === font) return hit.outline;
+  const outline = layerOutline(layer, font);
+  outlineCache.set(layer, { font, outline });
+  return outline;
+}
+
 export function outlineBounds(outline: LayerOutline): BoundingBox | null {
   return boundingBoxOfMany([...outline.rings, ...outline.paths]);
 }
@@ -106,16 +137,26 @@ export function hitTestOutline(
   return false;
 }
 
-export function boundsHandles(bounds: BoundingBox): Point[] {
-  return [
-    { x: bounds.minX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.maxY },
-    { x: bounds.minX, y: bounds.maxY },
-  ];
-}
-
-/** The corner diagonally opposite `index`, which a scale drag pivots about. */
-export function oppositeHandle(bounds: BoundingBox, index: number): Point {
-  return boundsHandles(bounds)[(index + 2) % 4];
+/**
+ * The frame a selection is dragged by.
+ *
+ * A single layer is measured in its **own** rotated frame, so its box hugs it
+ * at any angle and dragging an edge widens the layer rather than shearing it.
+ * Two or more layers have no single angle between them, so they get an upright
+ * frame — which is the honest answer, not a fallback.
+ */
+export function frameForLayers(
+  layers: readonly Layer[],
+  fontFor: (layer: Layer) => EmbroideryFont | null = () => null,
+): SelectionFrame | null {
+  if (layers.length === 0) return null;
+  // `frameAngleOf`, not `rotationOf`: a mirrored layer's x axis points backwards
+  // and would put the frame half a turn out. See its note in the engine.
+  const angle = layers.length === 1 ? frameAngleOf(layers[0].transform) : 0;
+  const rings: Point[][] = [];
+  for (const layer of layers) {
+    const outline = cachedLayerOutline(layer, fontFor(layer));
+    rings.push(...outline.rings, ...outline.paths);
+  }
+  return selectionFrame(rings, angle);
 }
