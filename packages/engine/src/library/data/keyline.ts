@@ -1,4 +1,5 @@
 import { circle, ellipse, heart, leaf, polygon, roundRect, star } from './draw.js';
+import { taper } from './detail.js';
 
 /**
  * Keylines — the dark outline that makes an icon read as a drawing rather than
@@ -171,45 +172,106 @@ export function leafBand(cx: number, top: number, w: number, h: number, wall = K
 export function strokeBand(
   points: readonly (readonly [number, number])[],
   width: number | ((t: number) => number) = KEYLINE,
-  options: { closed?: boolean } = {},
+  options: { closed?: boolean; align?: 'centre' | 'inside' } = {},
 ): string {
   const pts = points.map(([x, y]) => ({ x, y }));
   if (pts.length < 2) return '';
   const closed = options.closed ?? false;
+  const align = options.align ?? 'centre';
   const widthAt = typeof width === 'function' ? width : (): number => width;
-
-  const left: { x: number; y: number }[] = [];
-  const right: { x: number; y: number }[] = [];
   const last = pts.length - 1;
 
-  for (let i = 0; i <= last; i++) {
-    // The direction at a point is the average of the segments meeting there,
-    // which keeps a corner from pinching on the inside of the turn.
-    const prev = i === 0 ? (closed ? pts[last] : pts[0]) : pts[i - 1];
-    const next = i === last ? (closed ? pts[0] : pts[last]) : pts[i + 1];
-    let dx = next.x - prev.x;
-    let dy = next.y - prev.y;
-    const length = Math.hypot(dx, dy);
-    if (length < 1e-9) {
-      dx = 1;
-      dy = 0;
-    } else {
-      dx /= length;
-      dy /= length;
-    }
-    const half = widthAt(last === 0 ? 0 : i / last) / 2;
-    left.push({ x: pts[i].x - dy * half, y: pts[i].y + dx * half });
-    right.push({ x: pts[i].x + dy * half, y: pts[i].y - dx * half });
-  }
+  /** The given points pushed along their own normals by `scale` times the width. */
+  const shift = (scale: number): { x: number; y: number }[] =>
+    pts.map((point, i) => {
+      // The direction at a point is the average of the segments meeting there,
+      // which keeps a corner from pinching on the inside of the turn.
+      const prev = i === 0 ? (closed ? pts[last] : pts[0]) : pts[i - 1];
+      const next = i === last ? (closed ? pts[0] : pts[last]) : pts[i + 1];
+      let dx = next.x - prev.x;
+      let dy = next.y - prev.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1e-9) {
+        dx = 1;
+        dy = 0;
+      } else {
+        dx /= length;
+        dy /= length;
+      }
+      const w = widthAt(last === 0 ? 0 : i / last) * scale;
+      return { x: point.x - dy * w, y: point.y + dx * w };
+    });
 
   const draw = (ring: readonly { x: number; y: number }[]): string =>
     `M ${ring.map((p) => `${fmt(p.x)} ${fmt(p.y)}`).join(' L ')} Z`;
 
-  if (closed) {
-    // Two rings: the outer contour and the cavity inside it.
-    return `${draw(left)} ${draw(right)}`;
+  if (!closed) {
+    const a = shift(0.5);
+    const b = shift(-0.5);
+    return draw([...a, ...b.slice().reverse()]);
   }
-  return draw([...left, ...right.slice().reverse()]);
+
+  if (align === 'centre') return `${draw(shift(0.5))} ${draw(shift(-0.5))}`;
+
+  /*
+   * Inside alignment: the contour the caller gave *is* the outer edge, and the
+   * cavity is inset from it. This is rule 4 — an outline must not grow the
+   * shape it outlines — and it is what lets one array of points serve as both
+   * an icon's fill and its keyline, with no chance of the two drifting apart.
+   *
+   * Which of the two offsets is the inward one depends on the winding, so
+   * rather than reason about it, take whichever encloses less.
+   */
+  const plus = shift(1);
+  const minus = shift(-1);
+  const cavity = Math.abs(area(plus)) < Math.abs(area(minus)) ? plus : minus;
+  return `${draw(pts)} ${draw(cavity)}`;
+}
+
+function area(ring: readonly { x: number; y: number }[]): number {
+  let total = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    total += a.x * b.y - b.x * a.y;
+  }
+  return total / 2;
+}
+
+/**
+ * A band around a lens — the shape `taper` draws.
+ *
+ * The cavity is a second, shorter and thinner lens inside the first, which is
+ * the one case where the inset is trivial to state exactly. Petals, feathers,
+ * grains, leaf blades and whiskers are all lenses, so this is how most of the
+ * small repeated things in the catalogue get outlined.
+ */
+export function taperBand(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number,
+  wall = KEYLINE,
+): string {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-9) return '';
+  // Pull the ends in by more than the wall: a lens is pointed, so an inner lens
+  // shortened only by the wall would poke out through the tips.
+  const back = Math.min(wall * 1.8, length * 0.4);
+  const ux = (dx / length) * back;
+  const uy = (dy / length) * back;
+  return (
+    `${taper(ax, ay, bx, by, width)} ` +
+    `${taper(ax + ux, ay + uy, bx - ux, by - uy, Math.max(width - wall * 2, width * 0.2))}`
+  );
+}
+
+/** A closed polygon through the given points, for the fill a band outlines. */
+export function polyPath(points: readonly (readonly [number, number])[]): string {
+  return `M ${points.map(([x, y]) => `${fmt(x)} ${fmt(y)}`).join(' L ')} Z`;
 }
 
 function fmt(value: number): string {

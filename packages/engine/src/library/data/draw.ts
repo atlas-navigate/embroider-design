@@ -330,6 +330,40 @@ export function scallopRing(
   return `${out} Z`;
 }
 
+/**
+ * A smooth closed curve through the given points.
+ *
+ * Catmull-Rom converted to cubics, so the curve passes *through* every point
+ * rather than being pulled toward it. That is the property that matters for
+ * authoring: the same array of points can describe an organic silhouette here
+ * and be handed to `strokeBand` for that silhouette's keyline, and the two
+ * cannot drift apart the way a hand-typed path and a hand-typed outline do.
+ *
+ * `tension` 0 gives straight lines between the points; 1 is the natural spline.
+ */
+export function smoothClosed(
+  points: readonly (readonly [number, number])[],
+  tension = 1,
+): string {
+  const pts = points.map(([x, y]) => ({ x, y }));
+  const count = pts.length;
+  if (count < 3) return '';
+  const k = tension / 6;
+  const at = (i: number): { x: number; y: number } => pts[((i % count) + count) % count];
+
+  let out = `M ${n(pts[0].x)} ${n(pts[0].y)}`;
+  for (let i = 0; i < count; i++) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+    const c1 = { x: p1.x + (p2.x - p0.x) * k, y: p1.y + (p2.y - p0.y) * k };
+    const c2 = { x: p2.x - (p3.x - p1.x) * k, y: p2.y - (p3.y - p1.y) * k };
+    out += ` C ${n(c1.x)} ${n(c1.y)} ${n(c2.x)} ${n(c2.y)} ${n(p2.x)} ${n(p2.y)}`;
+  }
+  return `${out} Z`;
+}
+
 /** Repeats a path-maker over a list of positions, joining the results. */
 export function repeat<T>(items: readonly T[], make: (item: T, index: number) => string): string {
   return items.map(make).join(' ');

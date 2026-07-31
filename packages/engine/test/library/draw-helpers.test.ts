@@ -19,6 +19,7 @@ import {
   ellipseBand,
   heartBand,
   leafBand,
+  polyPath,
   polygonBand,
   roundRectBand,
   starBand,
@@ -153,6 +154,43 @@ describe('keyline bands', () => {
       const regions = regionsOf(circleBand(50, 50, 20, wall));
       expect(regions, `wall ${wall}`).toHaveLength(1);
       expect(regions[0].holes, `wall ${wall} closed the cavity`).toHaveLength(1);
+    }
+  });
+
+  it('lays an inside-aligned band exactly on the contour it was given', () => {
+    // The property the icon files rely on: one array of points serves as both
+    // the fill and its outline, so the two can never drift apart.
+    const spiky: [number, number][] = [
+      [50, 4],
+      [58, 21],
+      [70, 15],
+      [66, 32],
+      [83, 26],
+      [74, 40],
+      [96, 40],
+      [82, 52],
+      [74, 66],
+      [60, 74],
+      [50, 78],
+      [40, 74],
+      [26, 66],
+      [18, 52],
+      [4, 40],
+      [26, 40],
+      [17, 26],
+      [34, 32],
+      [30, 15],
+      [42, 21],
+    ];
+    const band = strokeBand(spiky, KEYLINE, { closed: true, align: 'inside' });
+    const regions = regionsOf(band);
+    expect(regions, 'a concave outline should still be one area').toHaveLength(1);
+    expect(regions[0].holes, 'the cavity collapsed on a concave contour').toHaveLength(1);
+
+    const bandBox = boxOf(band);
+    const fillBox = boxOf(polyPath(spiky));
+    for (const key of ['minX', 'minY', 'maxX', 'maxY'] as const) {
+      expect(bandBox[key], key).toBeCloseTo(fillBox[key], 6);
     }
   });
 
