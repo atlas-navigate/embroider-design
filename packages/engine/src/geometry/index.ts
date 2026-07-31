@@ -4,6 +4,7 @@ export * from './bezier.js';
 export * from './path.js';
 export * from './regions.js';
 export * from './offset.js';
+export * from './boolean.js';
 export * from './simplify.js';
 export * from './scanline.js';
 export * from './distance-transform.js';

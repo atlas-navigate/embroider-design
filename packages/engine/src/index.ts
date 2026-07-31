@@ -52,6 +52,19 @@ export {
   polylineLength,
 } from './geometry/path.js';
 export { groupRingsIntoRegions, regionToRings } from './geometry/regions.js';
+/**
+ * Boolean operations, at the top level for the same reason as the transforms:
+ * cutting and hollowing are things the *user* does, so the editor reaches for
+ * them constantly and should not have to go through `geometry.` to find them.
+ */
+export {
+  booleanRings,
+  hollowRings,
+  tryBooleanRings,
+  unionAll,
+  type BooleanOp,
+  type BooleanResult,
+} from './geometry/boolean.js';
 
 export * from './pattern/index.js';
 export * from './formats/index.js';

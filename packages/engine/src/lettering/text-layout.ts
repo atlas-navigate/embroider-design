@@ -7,6 +7,10 @@ import {
   pairKerning,
   type EmbroideryFont,
 } from './font.js';
+// The two modules refer to each other, but only this direction carries a
+// runtime value: `text-warp` imports nothing from here but types, which are
+// erased, so there is no import cycle at run time.
+import { applyTextShape, type TextShape } from './text-warp.js';
 
 /**
  * Where each glyph sits, using the font's own metrics.
@@ -36,6 +40,12 @@ export interface TextLayoutOptions {
   kerning?: boolean;
   /** Wrap width in design units. `0`/omitted means never wrap. */
   maxWidth?: number;
+  /**
+   * Bends the finished line onto a curve. Applied after typesetting, so
+   * wrapping, alignment and kerning are all decided on the straight text and a
+   * curve never changes where the words break.
+   */
+  shape?: TextShape;
 }
 
 export interface PlacedGlyph {
@@ -46,6 +56,11 @@ export interface PlacedGlyph {
   /** This glyph's own advance, excluding letter/word spacing. */
   advance: number;
   lineIndex: number;
+  /**
+   * Radians to turn the glyph about its pen origin, set by a text shape.
+   * Absent means upright, which is every glyph in straight text.
+   */
+  rotation?: number;
 }
 
 export interface LaidOutLine {
@@ -61,9 +76,21 @@ export interface TextLayout {
   lines: LaidOutLine[];
   /** Every glyph from every line, in reading order. */
   glyphs: PlacedGlyph[];
-  /** Block width: the widest line, or the wrap width if one was given. */
+  /**
+   * Block width as typeset: the widest line, or the wrap width if one was
+   * given. This is the *unwarped* measurement, because it is what alignment
+   * and wrapping are defined against — a curved line still centres on the same
+   * width it would have had straight. For where the glyphs actually ended up,
+   * read `bounds`.
+   */
   width: number;
   height: number;
+  /**
+   * Where the glyphs really are, advance boxes included. Equal to
+   * `0,0 – width,height` for straight text, and the reason a curved layer still
+   * gets a selection rectangle that hugs it.
+   */
+  bounds: BoundingBox;
   lineHeight: number;
   ascent: number;
   descent: number;
@@ -214,20 +241,26 @@ export function layoutText(
     if (!missing.includes(glyph.char)) missing.push(glyph.char);
   }
 
-  return {
+  const height = ascent + (lines.length - 1) * resolved.lineHeight + descent;
+  const straight: TextLayout = {
     lines,
     glyphs: placed,
     width: blockWidth,
-    height: ascent + (lines.length - 1) * resolved.lineHeight + descent,
+    height,
+    bounds: { minX: 0, minY: 0, maxX: blockWidth, maxY: height },
     lineHeight: resolved.lineHeight,
     ascent,
     descent,
     size: resolved.size,
     missing,
   };
+
+  // Shaping comes last, on a finished block: bending the text must not be able
+  // to change where the words broke or how the lines aligned.
+  return applyTextShape(straight, options.shape);
 }
 
 /** The block's extent, for placing a text layer on the canvas. */
 export function textLayoutBounds(layout: TextLayout): BoundingBox {
-  return { minX: 0, minY: 0, maxX: layout.width, maxY: layout.height };
+  return layout.bounds;
 }

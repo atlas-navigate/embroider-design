@@ -22,6 +22,7 @@ import {
   SelectField,
   SliderField,
 } from '../components/controls.js';
+import { CombinePanel } from './CombinePanel.js';
 import { TextProperties } from './TextPanel.js';
 
 /**
@@ -163,6 +164,8 @@ export function PropertiesPanel({ compiled }: PropertiesPanelProps): JSX.Element
 
   return (
     <>
+      <CombinePanel />
+
       <PanelSection title={layer.name}>
         <ColorField
           label="Thread colour"

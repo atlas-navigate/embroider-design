@@ -1,5 +1,6 @@
 import type { Point } from '../geometry/point.js';
 import { groupRingsIntoRegions, regionToRings, type RingRegion } from '../geometry/regions.js';
+import { applyToPoints, compose, rotation, translation } from '../geometry/transform.js';
 import { generateRegionStitches, type RegionStitchResult } from '../stitchgen/region.js';
 import type { StitchSettings, StitchType } from '../stitchgen/settings.js';
 import { DEFAULT_GLYPH_TOLERANCE, type EmbroideryFont } from './font.js';
@@ -47,6 +48,19 @@ export interface TextStitchResult {
   warnings: string[];
 }
 
+/**
+ * The matrix that carries a glyph's own outline to where it was placed.
+ *
+ * Rotation first, about the pen origin, then the move: that order is what makes
+ * a glyph on a curve turn on the spot to follow the tangent instead of swinging
+ * around the block's origin.
+ */
+function glyphPlacement(origin: Point, radians: number): ReturnType<typeof compose> {
+  return radians === 0
+    ? translation(origin.x, origin.y)
+    : compose(rotation(radians), translation(origin.x, origin.y));
+}
+
 /** Positioned, nesting-resolved regions for one glyph. */
 export function glyphRegionsAt(
   font: EmbroideryFont,
@@ -54,11 +68,12 @@ export function glyphRegionsAt(
   size: number,
   origin: Point,
   tolerance = DEFAULT_GLYPH_TOLERANCE,
+  radians = 0,
 ): RingRegion[] {
   const rings = font.glyphRings(char, size, tolerance);
   if (rings.length === 0) return [];
-  const moved = rings.map((ring) => ring.map((p) => ({ x: p.x + origin.x, y: p.y + origin.y })));
-  return groupRingsIntoRegions(moved);
+  const matrix = glyphPlacement(origin, radians);
+  return groupRingsIntoRegions(rings.map((ring) => applyToPoints(matrix, ring)));
 }
 
 export function generateGlyphStitches(
@@ -74,6 +89,7 @@ export function generateGlyphStitches(
     size,
     { x: glyph.x, y: glyph.y },
     options.tolerance,
+    glyph.rotation ?? 0,
   );
   const results: RegionStitchResult[] = [];
   const runs: Point[][] = [];
@@ -143,8 +159,9 @@ export function textToRings(
   const rings: Point[][] = [];
   for (const glyph of layout.glyphs) {
     if (glyph.char === ' ' || glyph.char === '\t') continue;
+    const matrix = glyphPlacement({ x: glyph.x, y: glyph.y }, glyph.rotation ?? 0);
     for (const ring of font.glyphRings(glyph.char, layout.size, tolerance)) {
-      rings.push(ring.map((p) => ({ x: p.x + glyph.x, y: p.y + glyph.y })));
+      rings.push(applyToPoints(matrix, ring));
     }
   }
   return { layout, rings };

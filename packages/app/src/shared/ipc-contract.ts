@@ -62,6 +62,13 @@ export type MenuCommand =
   | 'group'
   | 'ungroup'
   | 'shapes'
+  | 'combine-union'
+  | 'combine-subtract'
+  | 'combine-intersect'
+  | 'combine-exclude'
+  | 'hollow'
+  | 'outline-text'
+  | 'save-custom-shape'
   | 'check-for-updates'
   | 'about';
 
@@ -93,6 +100,11 @@ export interface EmbroiderApi {
   pickFontFile(): Promise<FontFileInfo | null>;
   readFontCache(): Promise<string | null>;
   writeFontCache(text: string): Promise<void>;
+
+  /** The user's saved shapes. `null` on a machine that has never saved one. */
+  readCustomShapes(): Promise<string | null>;
+  /** False when the library could not be written, so the UI can say so. */
+  writeCustomShapes(text: string): Promise<boolean>;
 
   /** Puts the dot in the title bar and guards the close button. */
   setDocumentEdited(edited: boolean, title: string): void;
@@ -126,6 +138,8 @@ export const IPC = {
   pickFontFile: 'fonts:pick',
   readFontCache: 'fonts:cache-read',
   writeFontCache: 'fonts:cache-write',
+  readCustomShapes: 'library:read-custom',
+  writeCustomShapes: 'library:write-custom',
   setDocumentEdited: 'window:set-edited',
   confirmDiscard: 'window:confirm-discard',
   closeWindow: 'window:close',

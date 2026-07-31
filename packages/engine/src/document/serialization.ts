@@ -1,4 +1,6 @@
 import { IDENTITY } from '../geometry/transform.js';
+import type { Point } from '../geometry/point.js';
+import type { TextShape } from '../lettering/text-warp.js';
 import { thread as makeThread, type ThreadColor } from '../pattern/thread.js';
 import { DEFAULT_HOOP, findHoopPreset, type HoopPreset } from './hoop.js';
 import { createLayerId, type Layer } from './layer.js';
@@ -68,6 +70,50 @@ function coerceHoop(value: unknown): HoopPreset {
   return DEFAULT_HOOP;
 }
 
+function finiteOr(value: unknown, fallback: number): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+/**
+ * A text shape, or straight when it cannot be trusted.
+ *
+ * A curve is decoration: a project whose shape record is unreadable should open
+ * with the lettering straight, not refuse to open. Anything unrecognised —
+ * a future release's shape type, a hand-edited file, a truncated download —
+ * lands on `none`.
+ */
+function coerceTextShape(value: unknown): TextShape | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  switch (record.type) {
+    case 'arc':
+      return { type: 'arc', sweep: finiteOr(record.sweep, 0) };
+    case 'wave':
+      return {
+        type: 'wave',
+        amplitude: finiteOr(record.amplitude, 0),
+        cycles: finiteOr(record.cycles, 0),
+      };
+    case 'path': {
+      if (!Array.isArray(record.points)) return { type: 'none' };
+      const points: Point[] = [];
+      for (const entry of record.points) {
+        if (typeof entry !== 'object' || entry === null) continue;
+        const point = entry as Record<string, unknown>;
+        const x = Number(point.x);
+        const y = Number(point.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y });
+      }
+      return points.length >= 2 ? { type: 'path', points } : { type: 'none' };
+    }
+    case 'none':
+      return { type: 'none' };
+    default:
+      return undefined;
+  }
+}
+
 function coerceLayer(value: unknown, index: number): Layer | null {
   const record = asRecord(value, `Layer ${index}`);
   const kind = record.kind;
@@ -88,6 +134,12 @@ function coerceLayer(value: unknown, index: number): Layer | null {
         ? record.transform
         : { ...IDENTITY },
   } as unknown as Layer;
+
+  if (layer.kind === 'text') {
+    const shape = coerceTextShape(record.shape);
+    if (shape && shape.type !== 'none') layer.shape = shape;
+    else delete layer.shape;
+  }
 
   // A layer of the right kind but with no content is dead weight in the stack.
   if (layer.kind === 'shape' && typeof (layer as { geometry?: unknown }).geometry !== 'object') {

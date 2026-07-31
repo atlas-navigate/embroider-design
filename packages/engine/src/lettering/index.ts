@@ -4,4 +4,5 @@ export * from './font-catalog.js';
 export * from './font-category.js';
 export * from './font-metrics.js';
 export * from './text-layout.js';
+export * from './text-warp.js';
 export * from './glyph-to-stitch.js';

@@ -5,6 +5,7 @@ import type { StitchPoint } from '../pattern/stitch.js';
 import { defaultThreadForIndex, type ThreadColor } from '../pattern/thread.js';
 import type { PartialStitchSettings, StitchType } from '../stitchgen/settings.js';
 import type { TextAlign } from '../lettering/text-layout.js';
+import type { TextShape } from '../lettering/text-warp.js';
 import type { ShapeGeometry } from './shapes.js';
 
 /**
@@ -71,6 +72,11 @@ export interface TextLayer extends LayerBase {
   maxWidth: number;
   /** Top-left of the text block, before `transform`. */
   origin: Point;
+  /**
+   * Curve to bend the line onto. Optional, and absent means straight — which
+   * is what every project saved before 0.3.0 says, so they load unchanged.
+   */
+  shape?: TextShape;
 }
 
 export interface TraceSource {
@@ -167,6 +173,7 @@ export function createTextLayer(
     kerning: options.kerning ?? true,
     maxWidth: options.maxWidth ?? 0,
     origin: options.origin ? { ...options.origin } : { x: 0, y: 0 },
+    ...(options.shape ? { shape: options.shape } : {}),
     ...pickOverrides(options),
   };
 }

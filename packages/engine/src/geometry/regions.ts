@@ -1,4 +1,5 @@
 import type { Point } from './point.js';
+import type { BoundingBox } from './path.js';
 import {
   boundingBoxOfPoints,
   dedupeConsecutivePoints,
@@ -47,8 +48,34 @@ export function representativeInteriorPoint(ring: readonly Point[]): Point | nul
 interface AnalysedRing {
   points: Point[];
   area: number;
+  box: BoundingBox | null;
   interior: Point | null;
   depth: number;
+}
+
+/**
+ * Whether `inner` can possibly be a hole in `outer`.
+ *
+ * One interior point landing inside another ring is not enough to call it a
+ * hole, and hand-drawn artwork is full of counter-examples: a cloud is three
+ * overlapping circles, and the centre of the small one sits inside the big one
+ * without the small one being a hole in it. Nesting them by that test alone
+ * cuts a lobe straight out of the cloud — on screen and in the stitches.
+ *
+ * A real hole is *entirely* inside the ring it is cut from, so its box is
+ * inside that ring's box too. Overlapping blobs always break out of the box
+ * somewhere, which is exactly what tells the two cases apart. The tolerance
+ * lets a hole touch the boundary, which a font counter occasionally does.
+ */
+function boxWithinBox(inner: BoundingBox | null, outer: BoundingBox | null): boolean {
+  if (!inner || !outer) return false;
+  const slack = 1e-6;
+  return (
+    inner.minX >= outer.minX - slack &&
+    inner.maxX <= outer.maxX + slack &&
+    inner.minY >= outer.minY - slack &&
+    inner.maxY <= outer.maxY + slack
+  );
 }
 
 /**
@@ -64,6 +91,7 @@ export function groupRingsIntoRegions(rings: readonly (readonly Point[])[]): Rin
     analysed.push({
       points,
       area: polygonArea(points),
+      box: boundingBoxOfPoints(points),
       interior: representativeInteriorPoint(points),
       depth: 0,
     });
@@ -75,6 +103,7 @@ export function groupRingsIntoRegions(rings: readonly (readonly Point[])[]): Rin
     for (const other of analysed) {
       if (other === ring) continue;
       if (other.area <= ring.area) continue;
+      if (!boxWithinBox(ring.box, other.box)) continue;
       if (pointInPolygon(ring.interior, other.points)) ring.depth++;
     }
   }
@@ -93,6 +122,7 @@ export function groupRingsIntoRegions(rings: readonly (readonly Point[])[]): Rin
     let best: AnalysedRing | null = null;
     for (const candidate of analysed) {
       if (candidate.depth !== hole.depth - 1) continue;
+      if (!boxWithinBox(hole.box, candidate.box)) continue;
       if (!pointInPolygon(hole.interior, candidate.points)) continue;
       if (!best || candidate.area < best.area) best = candidate;
     }

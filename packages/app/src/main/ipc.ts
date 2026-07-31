@@ -31,6 +31,17 @@ const EMBROIDERY_FILTER = {
 
 const FONT_CACHE_FILE = 'font-catalog.json';
 
+/**
+ * The user's own shapes, in their profile rather than beside the app.
+ *
+ * `userData` is created by Electron before the app is ready, survives an
+ * upgrade, and is per-user — all three matter for a library someone builds up
+ * over months. Installing next to the binary would put it under Program Files,
+ * where a per-user install cannot reliably write and an uninstall would take it
+ * with it.
+ */
+const CUSTOM_SHAPES_FILE = 'custom-shapes.json';
+
 async function loadFile(path: string): Promise<LoadedFile> {
   const buffer = await readFile(path);
   return { path, name: basename(path), data: new Uint8Array(buffer) };
@@ -143,6 +154,27 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       await writeFile(join(app.getPath('userData'), FONT_CACHE_FILE), text, 'utf8');
     } catch {
       // A cache that cannot be written is a slow start, not a failure.
+    }
+  });
+
+  ipcMain.handle(IPC.readCustomShapes, async (): Promise<string | null> => {
+    try {
+      return await readFile(join(app.getPath('userData'), CUSTOM_SHAPES_FILE), 'utf8');
+    } catch {
+      // No file yet is the normal state of a fresh install, not an error.
+      return null;
+    }
+  });
+
+  // Written whole rather than appended: the library is small, and replacing it
+  // in one call means a crash mid-save leaves either the old file or the new
+  // one, never half of each.
+  ipcMain.handle(IPC.writeCustomShapes, async (_event, text: string): Promise<boolean> => {
+    try {
+      await writeFile(join(app.getPath('userData'), CUSTOM_SHAPES_FILE), text, 'utf8');
+      return true;
+    } catch {
+      return false;
     }
   });
 

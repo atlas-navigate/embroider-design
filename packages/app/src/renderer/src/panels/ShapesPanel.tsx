@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+
 import {
-  CATEGORIES,
   allShapes,
+  groupRingsIntoRegions,
   libraryShapeBounds,
   pathFromData,
-  searchShapes,
+  populatedCategories,
+  regionToRings,
+  searchShapeList,
   shapeToOpenPaths,
   shapeToRings,
   type CategoryId,
@@ -12,6 +15,7 @@ import {
   type Point,
 } from '@embroider-design/engine';
 import { useDocumentStore } from '../state/document-store.js';
+import { useCustomShapeStore } from '../state/custom-shape-store.js';
 
 /**
  * The shape and icon library.
@@ -54,10 +58,15 @@ function drawShapeThumbnail(canvas: HTMLCanvasElement, shape: LibraryShape): voi
   for (const part of shape.parts) {
     const geometry = pathFromData(part.d);
     const colour = part.color ?? '#8ba3c7';
-    const rings = shapeToRings(geometry);
-    if (rings.length > 0) {
+    context.fillStyle = colour;
+    // One path per filled region. Even-odd within a region is what makes a
+    // counter-ring read as the hole it is rather than filling over the thing
+    // it is cut out of; keeping regions apart is what stops two overlapping
+    // rings of one part — the three circles of a cloud — from cancelling each
+    // other out into a stencil.
+    for (const region of groupRingsIntoRegions(shapeToRings(geometry))) {
       context.beginPath();
-      for (const ring of rings) {
+      for (const ring of regionToRings(region)) {
         ring.forEach((point, index) => {
           const p = project(point);
           if (index === 0) context.moveTo(p.x, p.y);
@@ -65,9 +74,6 @@ function drawShapeThumbnail(canvas: HTMLCanvasElement, shape: LibraryShape): voi
         });
         context.closePath();
       }
-      context.fillStyle = colour;
-      // Even-odd, so a counter-ring reads as the hole it is rather than
-      // filling over the thing it is cut out of.
       context.fill('evenodd');
     }
     for (const path of shapeToOpenPaths(geometry)) {
@@ -105,21 +111,51 @@ export function ShapesPanel(): JSX.Element {
   const pendingShapeId = useDocumentStore((state) => state.pendingShapeId);
   const setPendingShape = useDocumentStore((state) => state.setPendingShape);
 
-  const results = useMemo(() => {
-    const within = category === 'all' ? undefined : category;
-    // A search spans the whole catalogue: someone typing "pumpkin" while the
-    // Basic category happens to be selected wants the pumpkin, not nothing.
-    return query.trim() ? searchShapes(query) : searchShapes('', within);
-  }, [query, category]);
+  const customShapes = useCustomShapeStore((state) => state.shapes);
+  const customLoaded = useCustomShapeStore((state) => state.loaded);
+  const customError = useCustomShapeStore((state) => state.error);
+  const loadCustom = useCustomShapeStore((state) => state.load);
+  const removeCustom = useCustomShapeStore((state) => state.remove);
+  const renameCustom = useCustomShapeStore((state) => state.rename);
 
-  const shapeCount = allShapes().length;
+  useEffect(() => {
+    if (!customLoaded) void loadCustom();
+  }, [customLoaded, loadCustom]);
+
+  /**
+   * The user's shapes sit at the front of the pool, so a search that matches
+   * both finds theirs first — they named it, so they are looking for it.
+   */
+  const pool = useMemo(() => [...customShapes, ...allShapes()], [customShapes]);
+
+  const results = useMemo(() => {
+    if (query.trim()) {
+      // A search spans everything: someone typing "pumpkin" while the Basic
+      // category happens to be selected wants the pumpkin, not nothing.
+      return searchShapeList(pool, query);
+    }
+    if (category === 'all') return pool;
+    return pool.filter((shape) => shape.category === category);
+  }, [query, category, pool]);
+
+  // Categories that shipped empty are hidden, and "My shapes" only appears once
+  // there is something in it — an empty chip is a dead end.
+  const categories = useMemo(
+    () =>
+      populatedCategories().filter(
+        (entry) => entry.id !== 'custom' || customShapes.length > 0,
+      ),
+    [customShapes.length],
+  );
+
+  const isCustom = (shape: LibraryShape): boolean => shape.category === 'custom';
 
   return (
     <div className="panel shapes-panel">
       <input
         type="search"
         className="shape-search"
-        placeholder={`Search ${shapeCount} shapes and icons…`}
+        placeholder={`Search ${pool.length} shapes and icons…`}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         aria-label="Search shapes"
@@ -134,7 +170,7 @@ export function ShapesPanel(): JSX.Element {
           >
             All
           </button>
-          {CATEGORIES.map((entry) => (
+          {categories.map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -145,6 +181,15 @@ export function ShapesPanel(): JSX.Element {
             </button>
           ))}
         </div>
+      )}
+
+      {customError && <p className="warn small">{customError}</p>}
+
+      {category === 'custom' && customShapes.length === 0 && (
+        <p className="muted small">
+          Nothing saved yet. Select shapes on the canvas, combine or hollow them in the Settings
+          tab, then use “Save as a shape”.
+        </p>
       )}
 
       {pendingShapeId && (
@@ -161,23 +206,53 @@ export function ShapesPanel(): JSX.Element {
       ) : (
         <div className="shape-grid">
           {results.map((shape) => (
-            <button
-              key={shape.id}
-              type="button"
-              className={
-                pendingShapeId === shape.id ? 'shape-card shape-card-active' : 'shape-card'
-              }
-              title={`${shape.name}${shape.parts.length > 1 ? ` — ${shape.parts.length} parts` : ''}`}
-              onClick={() => setPendingShape(pendingShapeId === shape.id ? null : shape.id)}
-            >
-              <ShapeThumbnail shape={shape} />
-              <span className="shape-name">{shape.name}</span>
-              {shape.parts.length > 1 && (
-                <span className="shape-parts" title="Placed as a group you can move as one">
-                  {shape.parts.length}
+            <div key={shape.id} className="shape-card-wrap">
+              <button
+                type="button"
+                className={
+                  pendingShapeId === shape.id ? 'shape-card shape-card-active' : 'shape-card'
+                }
+                title={`${shape.name}${shape.parts.length > 1 ? ` — ${shape.parts.length} parts` : ''}`}
+                onClick={() => setPendingShape(pendingShapeId === shape.id ? null : shape.id)}
+              >
+                <ShapeThumbnail shape={shape} />
+                <span className="shape-name">{shape.name}</span>
+                {shape.parts.length > 1 && (
+                  <span className="shape-parts" title="Placed as a group you can move as one">
+                    {shape.parts.length}
+                  </span>
+                )}
+              </button>
+              {isCustom(shape) && (
+                <span className="shape-card-tools">
+                  <button
+                    type="button"
+                    className="link"
+                    title="Rename this shape"
+                    onClick={() => {
+                      const next = window.prompt('Rename this shape', shape.name);
+                      if (next !== null) void renameCustom(shape.id, next);
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="link"
+                    title="Delete this shape from your library"
+                    onClick={() => {
+                      // Designs that already used it keep their own copy of the
+                      // geometry, so this only removes it from the library.
+                      if (window.confirm(`Delete “${shape.name}” from your shapes?`)) {
+                        void removeCustom(shape.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
                 </span>
               )}
-            </button>
+            </div>
           ))}
         </div>
       )}

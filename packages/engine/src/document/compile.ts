@@ -1,3 +1,4 @@
+import { mergeOverlappingRings } from '../geometry/boolean.js';
 import { boundingBoxOfMany, type BoundingBox } from '../geometry/path.js';
 import type { Point } from '../geometry/point.js';
 import { regionToRings } from '../geometry/regions.js';
@@ -95,7 +96,11 @@ function compileShapeLayer(
   result: LayerCompileResult,
 ): ColorRun[] {
   const runs: Point[][] = [];
-  const rings = shapeToRings(layer.geometry).map((ring) => applyToPoints(layer.transform, ring));
+  // Merged first: a part drawn as overlapping blobs is one filled area, and
+  // stitching it as several would sew the seams twice in the same thread.
+  const rings = mergeOverlappingRings(
+    shapeToRings(layer.geometry).map((ring) => applyToPoints(layer.transform, ring)),
+  );
 
   for (const region of groupRingsIntoRegions(rings)) {
     const generated = generateRegionStitches(
@@ -149,6 +154,7 @@ function compileTextLayer(
       align: layer.align,
       kerning: layer.kerning,
       maxWidth: layer.maxWidth,
+      shape: layer.shape,
     },
     { settings, stitchType: layer.stitchType },
   );

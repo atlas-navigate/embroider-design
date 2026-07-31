@@ -11,7 +11,14 @@ import {
 } from '@embroider-design/engine';
 import type { MenuCommand } from '../../shared/ipc-contract.js';
 import { useDocumentStore, type ToolId } from './state/document-store.js';
+import { useCustomShapeStore } from './state/custom-shape-store.js';
 import { useFontStore } from './state/font-store.js';
+import {
+  applyCombine,
+  applyHollow,
+  applyOutline,
+  saveSelectionAsShape,
+} from './state/shape-actions.js';
 import { useCompiledPattern } from './state/use-compiled-pattern.js';
 import { DesignCanvas } from './canvas/DesignCanvas.js';
 import { StitchPreview } from './canvas/StitchPreview.js';
@@ -43,6 +50,9 @@ const TOOLS: { id: ToolId; label: string; title: string; key: string }[] = [
   { id: 'text', label: 'T', title: 'Text (T)', key: 't' },
 ];
 
+/** What Shape ▸ Hollow uses, matching the Combine panel's opening value. */
+const MENU_HOLLOW_WALL_MM = 2;
+
 /** Arrow-key nudge directions, in document space (Y grows downwards). */
 const NUDGE_KEYS: Record<string, { x: number; y: number } | undefined> = {
   ArrowLeft: { x: -1, y: 0 },
@@ -73,6 +83,7 @@ export function App(): JSX.Element {
 
   const scanFonts = useFontStore((state) => state.scan);
   const addFontFile = useFontStore((state) => state.addFontFile);
+  const loadCustomShapes = useCustomShapeStore((state) => state.load);
 
   const compile = useCompiledPattern();
   const update = useUpdateState();
@@ -86,7 +97,10 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     void scanFonts();
-  }, [scanFonts]);
+    // Loaded at startup rather than when the Shapes tab is first opened, so a
+    // saved shape can be placed straight from a search without a pause.
+    void loadCustomShapes();
+  }, [scanFonts, loadCustomShapes]);
 
   useEffect(() => {
     window.embroider.setDocumentEdited(dirty, documentName || 'Untitled');
@@ -235,6 +249,37 @@ export function App(): JSX.Element {
       case 'shapes':
         setTab('shapes');
         return;
+      case 'combine-union':
+        setStatus(applyCombine('union'));
+        return;
+      case 'combine-subtract':
+        setStatus(applyCombine('difference'));
+        return;
+      case 'combine-intersect':
+        setStatus(applyCombine('intersection'));
+        return;
+      case 'combine-exclude':
+        setStatus(applyCombine('xor'));
+        return;
+      case 'hollow': {
+        // The menu has no slider, so it uses the same 2 mm the panel opens on
+        // and points at the panel for anything else.
+        const message = applyHollow(mmToUnits(MENU_HOLLOW_WALL_MM));
+        setStatus(
+          message ??
+            `Hollowed with a ${MENU_HOLLOW_WALL_MM} mm wall — change it under Settings.`,
+        );
+        return;
+      }
+      case 'outline-text':
+        setStatus(applyOutline());
+        return;
+      case 'save-custom-shape': {
+        const name = window.prompt('Save the selection as a shape. Name it:', '');
+        if (name === null) return;
+        void saveSelectionAsShape(name).then(setStatus);
+        return;
+      }
       case 'check-for-updates':
         void window.embroider.checkForUpdates().then((result) => {
           setStatus(updateStatusLabel(result) ?? 'You are on the latest version.');

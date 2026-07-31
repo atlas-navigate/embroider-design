@@ -57,6 +57,22 @@ export function buildMenu(getWindow: () => BrowserWindow | null): Menu {
       ],
     },
     {
+      label: '&Shape',
+      submenu: [
+        // Accelerators follow the drawing-program convention people arrive
+        // with: Ctrl+Shift+ the first letter of the operation.
+        { label: 'Weld', accelerator: 'CmdOrCtrl+Shift+W', click: send('combine-union') },
+        { label: 'Subtract', accelerator: 'CmdOrCtrl+Shift+X', click: send('combine-subtract') },
+        { label: 'Overlap', accelerator: 'CmdOrCtrl+Shift+I', click: send('combine-intersect') },
+        { label: 'Exclude', accelerator: 'CmdOrCtrl+Shift+E', click: send('combine-exclude') },
+        { type: 'separator' },
+        { label: 'Hollow…', accelerator: 'CmdOrCtrl+Shift+H', click: send('hollow') },
+        { label: 'Text to outlines', click: send('outline-text') },
+        { type: 'separator' },
+        { label: 'Save as a shape…', click: send('save-custom-shape') },
+      ],
+    },
+    {
       label: '&View',
       submenu: [
         { label: 'Zoom in', accelerator: 'CmdOrCtrl+Plus', click: send('zoom-in') },

@@ -17,10 +17,12 @@ import {
   type ShapeGeometry,
 } from '@embroider-design/engine';
 import { useDocumentStore, type ToolId } from '../state/document-store.js';
+import { useCustomShapeStore } from '../state/custom-shape-store.js';
 import { useFontStore } from '../state/font-store.js';
 import { hitTestOutline, layerOutline, oppositeHandle, outlineBounds } from './geometry.js';
 import {
   DARK_THEME,
+  drawBaselineGuide,
   drawGhost,
   drawHoop,
   drawLayer,
@@ -133,6 +135,9 @@ export function DesignCanvas(): JSX.Element {
     for (const layer of document.layers) {
       if (!layer.visible) continue;
       drawLayer(context, view, layer, selected.has(layer.id), fontForLayer(layer));
+      if (selected.has(layer.id)) {
+        drawBaselineGuide(context, view, layer, fontForLayer(layer), DARK_THEME);
+      }
     }
 
     const { boxes, union } = selectionBoxes();
@@ -214,7 +219,12 @@ export function DesignCanvas(): JSX.Element {
 
   const placeLibraryShape = (start: Point, end: Point): void => {
     const state = store.getState();
-    const shape = state.pendingShapeId ? shapeById(state.pendingShapeId) : null;
+    const id = state.pendingShapeId;
+    // The shipped catalogue first, then the user's own library — a saved shape
+    // is an ordinary `LibraryShape`, so placement needs nothing else from here.
+    const shape = id
+      ? (shapeById(id) ?? useCustomShapeStore.getState().shapeById(id))
+      : null;
     if (!shape) return;
 
     const width = Math.abs(end.x - start.x);

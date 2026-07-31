@@ -28,13 +28,22 @@ export type CategoryId =
   | 'school'
   | 'pets'
   | 'nautical'
-  | 'nature';
+  | 'nature'
+  | 'jewish'
+  /**
+   * Shapes the user made and saved. Never present in `CATALOGUE` — the app
+   * loads these from disk and merges them in — but it is a real category id
+   * because a saved shape is otherwise identical to a shipped one, and giving
+   * it the same type is what lets the panel, the thumbnails, the search and
+   * the placement code stay single implementations.
+   */
+  | 'custom';
 
 export interface ShapeCategory {
   id: CategoryId;
   name: string;
   /** Which half of the browser it belongs in. */
-  group: 'shapes' | 'icons';
+  group: 'shapes' | 'icons' | 'custom';
 }
 
 export const CATEGORIES: readonly ShapeCategory[] = [
@@ -57,6 +66,8 @@ export const CATEGORIES: readonly ShapeCategory[] = [
   { id: 'pets', name: 'Pets', group: 'icons' },
   { id: 'nautical', name: 'Nautical', group: 'icons' },
   { id: 'nature', name: 'Nature', group: 'icons' },
+  { id: 'jewish', name: 'Jewish holidays', group: 'icons' },
+  { id: 'custom', name: 'My shapes', group: 'custom' },
 ];
 
 /**

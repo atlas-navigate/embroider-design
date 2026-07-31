@@ -1,7 +1,14 @@
 import {
+  applyToPoint,
+  baselineFor,
+  compose,
+  groupRingsIntoRegions,
   hoopSizeUnits,
+  layoutText,
   mmToUnits,
+  regionToRings,
   threadToHex,
+  translation,
   type BoundingBox,
   type DesignDocument,
   type EmbroideryFont,
@@ -132,17 +139,25 @@ export function drawLayer(
   context.globalAlpha = layer.locked ? 0.4 : 1;
 
   if (outline.rings.length > 0) {
-    context.beginPath();
-    for (const ring of outline.rings) pathFromPoints(context, view, ring, true);
+    // One path per filled region rather than one for the whole layer. Even-odd
+    // over the lot would punch a hole wherever two rings of the same part
+    // overlap — a cloud drawn as three circles would come out as a stencil —
+    // and `groupRingsIntoRegions` is the same nesting the compiler stitches by,
+    // so the outline on screen agrees with the one in the file.
+    const regions = groupRingsIntoRegions(outline.rings);
     context.fillStyle = color;
-    // Translucent so overlapping layers and the grid stay legible; the stitch
-    // preview is where the design is shown as it will actually look.
-    context.globalAlpha *= 0.35;
-    context.fill('evenodd');
-    context.globalAlpha = layer.locked ? 0.4 : 1;
     context.strokeStyle = color;
     context.lineWidth = selected ? 2 : 1.25;
-    context.stroke();
+    for (const region of regions) {
+      context.beginPath();
+      for (const ring of regionToRings(region)) pathFromPoints(context, view, ring, true);
+      // Translucent so overlapping layers and the grid stay legible; the stitch
+      // preview is where the design is shown as it will actually look.
+      context.globalAlpha *= 0.35;
+      context.fill('evenodd');
+      context.globalAlpha = layer.locked ? 0.4 : 1;
+      context.stroke();
+    }
   }
 
   if (outline.paths.length > 0) {
@@ -271,4 +286,55 @@ export function layerBounds(
   font: EmbroideryFont | null = null,
 ): BoundingBox | null {
   return outlineBounds(layerOutline(layer, font));
+}
+
+/** How finely the guide curve is sampled. Enough for a full circle to look round. */
+const BASELINE_SAMPLES = 96;
+
+/**
+ * The curve a shaped text layer is sitting on.
+ *
+ * Curved lettering is hard to adjust blind: the letters are visibly turning but
+ * the circle they are turning around is invisible, so "is this centred on the
+ * badge?" has no answer. Drawing the baseline while the layer is selected gives
+ * that question one.
+ */
+export function drawBaselineGuide(
+  context: CanvasRenderingContext2D,
+  view: ViewTransform,
+  layer: Layer,
+  font: EmbroideryFont | null,
+  theme: CanvasTheme,
+): void {
+  if (layer.kind !== 'text' || !layer.shape || layer.shape.type === 'none' || !font) return;
+  if (layer.text.trim().length === 0) return;
+
+  const layout = layoutText(font, layer.text, {
+    size: layer.size,
+    letterSpacing: layer.letterSpacing,
+    wordSpacing: layer.wordSpacing,
+    lineHeight: layer.lineHeight,
+    align: layer.align,
+    kerning: layer.kerning,
+    maxWidth: layer.maxWidth,
+  });
+  const baseline = baselineFor(layer.shape, layout);
+  if (!baseline) return;
+
+  const matrix = compose(translation(layer.origin.x, layer.origin.y), layer.transform);
+  const points: Point[] = [];
+  for (let i = 0; i <= BASELINE_SAMPLES; i++) {
+    const s = (i / BASELINE_SAMPLES) * baseline.length;
+    points.push(applyToPoint(matrix, baseline.at(s).point));
+  }
+
+  context.save();
+  context.strokeStyle = theme.selection;
+  context.globalAlpha = 0.5;
+  context.lineWidth = 1;
+  context.setLineDash([3, 4]);
+  context.beginPath();
+  pathFromPoints(context, view, points, false);
+  context.stroke();
+  context.restore();
 }

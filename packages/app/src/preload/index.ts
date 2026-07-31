@@ -34,6 +34,9 @@ const api: EmbroiderApi = {
   readFontCache: () => ipcRenderer.invoke(IPC.readFontCache),
   writeFontCache: (text: string) => ipcRenderer.invoke(IPC.writeFontCache, text),
 
+  readCustomShapes: () => ipcRenderer.invoke(IPC.readCustomShapes),
+  writeCustomShapes: (text: string) => ipcRenderer.invoke(IPC.writeCustomShapes, text),
+
   setDocumentEdited: (edited: boolean, title: string) => {
     ipcRenderer.send(IPC.setDocumentEdited, edited, title);
   },

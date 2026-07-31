@@ -50,6 +50,7 @@ export function textOutline(layer: TextLayer, font: EmbroideryFont | null): Laye
     align: layer.align,
     kerning: layer.kerning,
     maxWidth: layer.maxWidth,
+    shape: layer.shape,
   });
   const matrix = compose(translation(layer.origin.x, layer.origin.y), layer.transform);
   return { rings: rings.map((ring) => applyToPoints(matrix, ring)), paths: [] };

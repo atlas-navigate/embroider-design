@@ -90,6 +90,8 @@ interface DocumentState {
 
   addLayer(layer: Layer, select?: boolean): void;
   addLayers(layers: readonly Layer[], select?: boolean): void;
+  /** Swaps layers out for the result of a shape operation, in their place. */
+  replaceLayersWith(layerIds: readonly string[], replacements: readonly Layer[]): void;
   addShape(geometry: ShapeGeometry): void;
   updateLayer(layerId: string, update: Partial<Layer> | ((layer: Layer) => Layer)): void;
   updateLayerSettings(layerId: string, settings: PartialStitchSettings): void;
@@ -187,6 +189,37 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         document,
         dirty: true,
         ...(select ? selection(layers.map((layer) => layer.id)) : {}),
+      };
+    });
+  },
+
+  /**
+   * The result of a boolean lands where its inputs were.
+   *
+   * Appending it instead would put a welded shape on top of the stack, and in
+   * embroidery the stack is the sewing order — a shape that was sewn first
+   * before the operation would suddenly be sewn last, on top of everything it
+   * used to sit under.
+   */
+  replaceLayersWith: (layerIds, replacements) => {
+    set((state) => {
+      const doomed = new Set(layerIds);
+      if (doomed.size === 0 || replacements.length === 0) return {};
+      const index = state.document.layers.findIndex((layer) => doomed.has(layer.id));
+      if (index < 0) return {};
+
+      const kept = state.document.layers.filter((layer) => !doomed.has(layer.id));
+      // Count how many survivors sat below the topmost removed layer; the
+      // replacement belongs at that depth.
+      const below = state.document.layers
+        .slice(0, index)
+        .filter((layer) => !doomed.has(layer.id)).length;
+      const layers = [...kept.slice(0, below), ...replacements, ...kept.slice(below)];
+
+      return {
+        document: { ...state.document, layers, modifiedAt: new Date().toISOString() },
+        dirty: true,
+        ...selection(replacements.map((layer) => layer.id)),
       };
     });
   },

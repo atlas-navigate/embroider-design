@@ -962,6 +962,34 @@ textarea:focus {
   gap: 6px;
 }
 
+/*
+ * A card and, for the user's own shapes, its rename/delete row.
+ *
+ * The tools sit outside the card button rather than inside it: a button inside
+ * a button is invalid HTML, and clicking "Delete" would also arm the shape for
+ * placement on its way up.
+ */
+.shape-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shape-card-wrap .shape-card {
+  flex: 1 1 auto;
+}
+
+.shape-card-tools {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.shape-card-tools .link {
+  padding: 0;
+}
+
 .shape-card {
   position: relative;
   display: flex;

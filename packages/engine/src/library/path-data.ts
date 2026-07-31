@@ -1,5 +1,14 @@
 import type { Point } from '../geometry/point.js';
+import { boundingBoxOfMany } from '../geometry/path.js';
+import {
+  compose,
+  identity,
+  scaling,
+  translation,
+  type AffineMatrix,
+} from '../geometry/transform.js';
 import type { PathGeometry, PathSegment, SubPath } from '../document/shapes.js';
+import { AUTHORING_BOX } from './types.js';
 
 /**
  * A small SVG path-data parser, so the shape catalogue can be written as
@@ -269,4 +278,74 @@ export function parsePathData(d: string): SubPath[] {
 /** The catalogue's storage form, ready for `shapeToRings`. */
 export function pathFromData(d: string): PathGeometry {
   return { type: 'path', subpaths: parsePathData(d) };
+}
+
+/**
+ * Two decimals in the authoring box is a hundredth of the shape's own size —
+ * on a 60 mm placement that is 6 µm, four times finer than the tolerance the
+ * curves were flattened at. More digits would only make the file bigger.
+ */
+const DEFAULT_DECIMALS = 2;
+
+function trim(value: number, decimals: number): string {
+  // `Number()` drops the trailing zeros `toFixed` insists on, and turns a "-0"
+  // produced by rounding a tiny negative back into "0".
+  return String(Number(value.toFixed(decimals)));
+}
+
+/**
+ * The writer side of the parser: rings back out as an SVG `d` string.
+ *
+ * This exists because a shape the user *made* — by cutting, hollowing or
+ * welding — has to be storable in the same form as a shape that shipped with
+ * the app. One representation for both means the custom library needs no code
+ * of its own for thumbnails, placement, search or stitching; it reuses the
+ * catalogue's.
+ *
+ * Only straight segments come out, and that is honest rather than lossy: a
+ * boolean operates on flattened rings, so straight segments are all there is
+ * left by the time a result exists.
+ */
+export function pathDataFromRings(
+  rings: readonly (readonly Point[])[],
+  decimals = DEFAULT_DECIMALS,
+): string {
+  const parts: string[] = [];
+  for (const ring of rings) {
+    if (ring.length < 3) continue;
+    const coordinates = ring.map((point) => `${trim(point.x, decimals)} ${trim(point.y, decimals)}`);
+    parts.push(`M ${coordinates.join(' L ')} Z`);
+  }
+  return parts.join(' ');
+}
+
+/**
+ * The transform that fits geometry into the 0-100 authoring box.
+ *
+ * Returned rather than applied, because a multi-part shape has to be fitted by
+ * *one* transform: scaling each part to its own bounds would pull a snowman's
+ * hat down over its face. Callers measure everything, ask for the matrix once,
+ * and apply it to every part.
+ *
+ * Uniform, for the reason `instantiate.ts` gives — a squashed satin column
+ * stops being a satin column.
+ */
+export function authoringBoxTransform(
+  rings: readonly (readonly Point[])[],
+  box = AUTHORING_BOX,
+): AffineMatrix {
+  const bounds = boundingBoxOfMany(rings);
+  if (!bounds) return identity();
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (width < 1e-9 && height < 1e-9) return identity();
+
+  const scale = box / Math.max(width, height);
+  return compose(
+    translation(-bounds.minX, -bounds.minY),
+    scaling(scale),
+    // Centred on the short axis, so a wide shape sits in the middle of the box
+    // rather than along its top edge.
+    translation((box - width * scale) / 2, (box - height * scale) / 2),
+  );
 }

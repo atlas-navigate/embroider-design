@@ -36,27 +36,38 @@ export function populatedCategories(): readonly ShapeCategory[] {
   return CATEGORIES.filter((category) => (byCategory.get(category.id)?.length ?? 0) > 0);
 }
 
-/** Pre-lowercased haystacks, so searching does not re-normalise on every keystroke. */
-const haystacks = new Map<string, string>();
-for (const shape of CATALOGUE) {
-  haystacks.set(
-    shape.id,
-    `${shape.name} ${shape.category} ${(shape.keywords ?? []).join(' ')}`.toLowerCase(),
-  );
+function haystackFor(shape: LibraryShape): string {
+  return `${shape.name} ${shape.category} ${(shape.keywords ?? []).join(' ')}`.toLowerCase();
 }
 
+/** Pre-lowercased haystacks, so searching does not re-normalise on every keystroke. */
+const haystacks = new Map<string, string>();
+for (const shape of CATALOGUE) haystacks.set(shape.id, haystackFor(shape));
+
 /**
- * Free-text search over name, category and keywords.
+ * Free-text search over any list of shapes.
+ *
+ * Split out from `searchShapes` so the user's own saved shapes are matched by
+ * exactly the same rules as the shipped ones. A second, subtly different search
+ * for the custom library is the kind of thing nobody notices until someone
+ * types two words and their own shape is the one that fails to appear.
  *
  * Every term has to match somewhere, so "christmas star" narrows rather than
  * widening — the opposite behaviour makes a 200-item catalogue useless.
  */
-export function searchShapes(query: string, within?: CategoryId): readonly LibraryShape[] {
+export function searchShapeList(
+  shapes: readonly LibraryShape[],
+  query: string,
+): readonly LibraryShape[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const pool = within ? shapesInCategory(within) : CATALOGUE;
-  if (terms.length === 0) return pool;
-  return pool.filter((shape) => {
-    const haystack = haystacks.get(shape.id) ?? '';
+  if (terms.length === 0) return shapes;
+  return shapes.filter((shape) => {
+    const haystack = haystacks.get(shape.id) ?? haystackFor(shape);
     return terms.every((term) => haystack.includes(term));
   });
+}
+
+/** Free-text search over the shipped catalogue. */
+export function searchShapes(query: string, within?: CategoryId): readonly LibraryShape[] {
+  return searchShapeList(within ? shapesInCategory(within) : CATALOGUE, query);
 }
