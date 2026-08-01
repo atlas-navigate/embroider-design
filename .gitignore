@@ -12,6 +12,9 @@ Thumbs.db
 .env.local
 coverage/
 packages/engine/catalogue*.svg
+# Annotated pages written by scripts/scan-sheets.mjs while tuning the icon-sheet
+# scanner. Generated from the reference sheets below, and just as unshippable.
+packages/app/sheet-scan/
 # Reference sheets the icon redraw is drawn against. Third-party artwork, and
 # several megabytes of it — useful on disk, not something to carry in history.
 Icon styles/

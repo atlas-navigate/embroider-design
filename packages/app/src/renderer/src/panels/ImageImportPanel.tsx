@@ -354,9 +354,16 @@ function SheetImport(): JSX.Element {
   const [detection, setDetection] = useState<'auto' | 'grid'>('auto');
   const [rows, setRows] = useState(4);
   const [columns, setColumns] = useState(4);
-  const [separation, setSeparation] = useState(2);
+  // Both of these are measured from the page unless the user takes them over.
+  // The measured value is almost always better than a number typed in — the
+  // right background tolerance differs by a factor of ten between a clean JPEG
+  // and a photograph of linen — so the slider starts disabled and showing what
+  // the scan decided, and unchecking Auto seeds it from there.
+  const [autoSeparation, setAutoSeparation] = useState(true);
+  const [separation, setSeparation] = useState(20);
+  const [autoTolerance, setAutoTolerance] = useState(true);
   const [tolerance, setTolerance] = useState(28);
-  const [minSize, setMinSize] = useState(0.5);
+  const [minSize, setMinSize] = useState(4);
 
   const [colors, setColors] = useState(5);
   const [smoothing, setSmoothing] = useState(1);
@@ -405,12 +412,14 @@ function SheetImport(): JSX.Element {
     }
     setScanning(true);
     let cancelled = false;
+    // Long enough that dragging a slider queues one scan rather than one per
+    // input event: a sheet takes the better part of a second to read.
     const timer = setTimeout(() => {
       try {
         const options = {
-          separation,
-          backgroundTolerance: tolerance,
-          minCellShare: minSize / 100,
+          ...(autoSeparation ? {} : { separation }),
+          ...(autoTolerance ? {} : { backgroundTolerance: tolerance }),
+          minCellFraction: minSize / 100,
         };
         const found =
           detection === 'grid'
@@ -418,7 +427,9 @@ function SheetImport(): JSX.Element {
             : scanIconSheet(source.image, options);
         if (cancelled) return;
         setScan(found);
-        setExcluded(new Set());
+        // Captions, headings and stray marks start unticked. Nothing is ever
+        // dropped for looking like one — a wrong guess has to cost a click.
+        setExcluded(new Set(found.cells.filter((cell) => cell.likelyLabel).map((cell) => cell.index)));
         setError(null);
       } catch (caught) {
         if (cancelled) return;
@@ -427,12 +438,12 @@ function SheetImport(): JSX.Element {
       } finally {
         if (!cancelled) setScanning(false);
       }
-    }, 0);
+    }, 120);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [source, detection, rows, columns, separation, tolerance, minSize]);
+  }, [source, detection, rows, columns, autoSeparation, separation, autoTolerance, tolerance, minSize]);
 
   // The contact sheet: the page with every cell boxed and numbered. This is the
   // checkpoint — "found twelve" and "found the right twelve" are different
@@ -470,11 +481,16 @@ function SheetImport(): JSX.Element {
           context.fillStyle = 'rgba(12, 14, 18, 0.6)';
           context.fillRect(x, y, w, h);
         }
-        context.strokeStyle = off ? '#8a8f98' : '#4da3ff';
+        // A cell the scan took for a caption keeps its dashed amber outline
+        // after the user puts it back, so "this was left out for a reason"
+        // stays on the page instead of vanishing at the moment it is overruled.
+        context.setLineDash(cell.likelyLabel ? [4, 3] : []);
+        context.strokeStyle = off ? '#8a8f98' : cell.likelyLabel ? '#e0a020' : '#4da3ff';
         context.strokeRect(x, y, w, h);
-        context.fillStyle = off ? '#8a8f98' : '#4da3ff';
+        context.fillStyle = off ? '#8a8f98' : cell.likelyLabel ? '#e0a020' : '#4da3ff';
         context.fillText(String(cell.index + 1), x + 2, y + 2);
       }
+      context.setLineDash([]);
     };
     image.src = source.dataUrl;
   }, [scan, source, excluded]);
@@ -523,7 +539,7 @@ function SheetImport(): JSX.Element {
       // no sign of progress.
       await new Promise((resolve) => setTimeout(resolve, 0));
       try {
-        const shape = libraryShapeFromImage(included[i].image, {
+        const shape = libraryShapeFromImage(included[i].crop(), {
           name: `${baseName.trim() || 'Icon'} ${i + 1}`,
           colors,
           smoothing,
@@ -557,7 +573,9 @@ function SheetImport(): JSX.Element {
       <PanelSection title="Import a sheet of icons">
         <p className="muted small">
           A page of separate drawings, cut apart and added to your shape library one icon at a
-          time. Flat line art with a plain background works best.
+          time. Each icon is traced from the original file rather than from the preview, so it
+          keeps whatever detail the sheet had. Textured and photographed backgrounds are read as
+          well as plain white.
         </p>
         <button type="button" className="primary" onClick={() => void pickFile()}>
           Choose a sheet…
@@ -608,38 +626,79 @@ function SheetImport(): JSX.Element {
                 />
               </>
             ) : (
-              <SliderField
-                label="Separation"
-                hint="Raise it to join one icon's pieces, lower it to split neighbours apart"
-                value={separation}
-                min={0}
-                max={8}
-                step={1}
-                onChange={setSeparation}
-              />
+              <>
+                <CheckboxField
+                  label="Work out the spacing"
+                  hint="Reads the rows and columns off the page itself"
+                  checked={autoSeparation}
+                  onChange={(next) => {
+                    if (!next && scan) setSeparation(scan.separationUsed);
+                    setAutoSeparation(next);
+                  }}
+                />
+                <SliderField
+                  label="Joining distance"
+                  hint="Raise it to join one icon's pieces, lower it to split neighbours apart"
+                  value={autoSeparation && scan ? scan.separationUsed : separation}
+                  min={0}
+                  max={120}
+                  step={1}
+                  disabled={autoSeparation}
+                  format={(value) => `${value} px`}
+                  onChange={setSeparation}
+                />
+              </>
             )}
+            <CheckboxField
+              label="Work out the background"
+              hint="Measures the page's own texture instead of guessing"
+              checked={autoTolerance}
+              onChange={(next) => {
+                if (!next && scan) setTolerance(scan.toleranceUsed);
+                setAutoTolerance(next);
+              }}
+            />
             <SliderField
               label="Background tolerance"
               hint="How different from the page a pixel must be to count as drawing"
-              value={tolerance}
+              value={autoTolerance && scan ? scan.toleranceUsed : tolerance}
               min={6}
-              max={90}
+              max={96}
               step={2}
+              disabled={autoTolerance}
               onChange={setTolerance}
             />
             <SliderField
               label="Smallest icon"
-              hint="Share of the page below which a mark is a speck"
+              hint="Share of the other icons' size below which a mark is a stray"
               value={minSize}
-              min={0.02}
-              max={4}
-              step={0.02}
-              format={(value) => `${value.toFixed(2)}%`}
+              min={1}
+              max={25}
+              step={1}
+              format={(value) => `${value}%`}
               onChange={setMinSize}
             />
           </PanelSection>
 
-          <PanelSection title="What was found">
+          <PanelSection
+            title="What was found"
+            action={
+              scan && scan.cells.length > 0 ? (
+                <span className="section-actions">
+                  <button type="button" className="link" onClick={() => setExcluded(new Set())}>
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => setExcluded(new Set(scan.cells.map((cell) => cell.index)))}
+                  >
+                    None
+                  </button>
+                </span>
+              ) : undefined
+            }
+          >
             {scanning && <p className="muted small">Looking…</p>}
             <canvas
               ref={contactRef}
@@ -652,11 +711,18 @@ function SheetImport(): JSX.Element {
                 : 'Nothing found yet'}
               . Click one to leave it out.
             </p>
+            {scan && scan.labelCount > 0 && (
+              <p className="muted small">
+                {scan.labelCount} look{scan.labelCount === 1 ? 's' : ''} like a caption, a heading
+                or a stray mark and {scan.labelCount === 1 ? 'is' : 'are'} left out. Click one to
+                put it back.
+              </p>
+            )}
             {scan?.crowded && (
               <p className="warn small">
-                The page and the drawings are running together, so the icons cannot be told
-                apart. Raise the background tolerance until they separate — a photograph of
-                stitching on fabric usually needs it well above the default.
+                The page has no readable background — the drawings and whatever they sit on run
+                together, so the icons cannot be told apart. Switch to Grid and give it the rows
+                and columns, or crop the sheet down to the artwork first.
               </p>
             )}
             {scan && scan.cells.length === 0 && !scan.crowded && (

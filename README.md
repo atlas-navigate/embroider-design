@@ -75,11 +75,18 @@ shortcut is the answer. If you want to launch it from a terminal anyway:
 - **Import a whole sheet of icons at once.** Point it at a page of clip-art —
   the kind sold as thirty little drawings in rows — and it finds each drawing,
   cuts it out and rebuilds it as a proper multi-layer shape in your library,
-  filed under a collection you name. A contact sheet shows every icon it found
-  with a box round it, so you can see it got the right ones and click to leave
-  any out before committing. One slider joins an icon's scattered pieces or
-  splits neighbours that ran together, and there is a plain rows-and-columns
-  mode for pages it cannot read on its own
+  filed under a collection you name. It reads the rows and columns off the page,
+  so an icon drawn in pieces that do not touch — a flame above its candle, a
+  snowman's stick arms, coins scattered over an owl — comes back as one icon and
+  not as three. The background is measured rather than assumed, which means
+  linen, a photographed page lit unevenly, and cream artwork on cream paper all
+  work as well as plain white. Each icon is then traced from the original file
+  at full resolution, not from the downscaled page. A contact sheet shows every
+  icon it found with a box round it, so you can see it got the right ones and
+  click to leave any out before committing; captions, headings and format rows
+  are recognised and start unticked, but never dropped. The joining distance and
+  the background tolerance are worked out for you and can be taken over, and
+  there is a plain rows-and-columns mode for pages it cannot read on its own
 - **Delete what you do not want.** Remove saved shapes one at a time or by the
   selection, delete a whole collection when an import comes out wrong, and hide
   the shipped icons you never use. Hidden icons stay installed and come back

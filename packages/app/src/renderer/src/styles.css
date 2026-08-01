@@ -622,6 +622,19 @@ textarea:focus {
   min-width: 0;
 }
 
+/* Reads as "this is what was measured" rather than as broken: the number stays
+   at full strength, only the track it came from fades. */
+.slider-input.is-disabled input[type='range'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.section-actions {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+}
+
 .slider-value {
   min-width: 7ch;
   text-align: right;

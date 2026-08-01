@@ -102,6 +102,13 @@ interface SliderFieldProps {
   step?: number;
   format?(value: number): string;
   hint?: string;
+  /**
+   * Shown, and showing a real value, but not the user's to set right now.
+   * Hiding the slider instead would be worse: the value is the interesting part
+   * — it is what the automatic reading decided — and a control that disappears
+   * gives no clue that it exists to be taken over.
+   */
+  disabled?: boolean;
 }
 
 export function SliderField({
@@ -113,16 +120,18 @@ export function SliderField({
   step = 1,
   format,
   hint,
+  disabled = false,
 }: SliderFieldProps): JSX.Element {
   return (
     <Field label={label} hint={hint}>
-      <span className="slider-input">
+      <span className={disabled ? 'slider-input is-disabled' : 'slider-input'}>
         <input
           type="range"
           min={min}
           max={max}
           step={step}
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(Number(event.target.value))}
         />
         <span className="slider-value">{format ? format(value) : value}</span>

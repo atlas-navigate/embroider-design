@@ -109,17 +109,23 @@ export function labelComponents(mask: Mask): ComponentLabels {
   const { width, height } = mask;
   const labels = new Int32Array(width * height).fill(-1);
   const sizes: number[] = [];
-  const stack: number[] = [];
+  // A typed stack rather than a JS array: on a two-megapixel mask the frontier
+  // reaches hundreds of thousands of entries, and every one of those is a boxed
+  // number in an array that keeps reallocating. It cannot overflow — a pixel is
+  // pushed only when its label is claimed, so at most one entry exists per
+  // pixel.
+  const stack = new Int32Array(width * height);
+  let top = 0;
 
   for (let start = 0; start < labels.length; start++) {
     if (mask.data[start] === 0 || labels[start] !== -1) continue;
     const label = sizes.length;
     let size = 0;
-    stack.push(start);
+    stack[top++] = start;
     labels[start] = label;
 
-    while (stack.length > 0) {
-      const index = stack.pop() as number;
+    while (top > 0) {
+      const index = stack[--top];
       size++;
       const y = Math.floor(index / width);
       const x = index - y * width;
@@ -132,13 +138,96 @@ export function labelComponents(mask: Mask): ComponentLabels {
           const neighbour = ny * width + nx;
           if (mask.data[neighbour] === 0 || labels[neighbour] !== -1) continue;
           labels[neighbour] = label;
-          stack.push(neighbour);
+          stack[top++] = neighbour;
         }
       }
     }
     sizes.push(size);
   }
   return { labels, sizes };
+}
+
+export interface LabelDistance {
+  /** Chamfer distance to the nearest labelled pixel. Three units to a pixel. */
+  distance: Int32Array;
+  /** Which component that nearest pixel belongs to. -1 only if there are none. */
+  nearest: Int32Array;
+}
+
+/**
+ * Distance to the nearest component, carrying that component's identity along.
+ *
+ * This is a Voronoi diagram of the components and the distance to each, built
+ * in two sweeps. It exists to answer one question cheaply: for every pair of
+ * components on the page, how far apart are they *actually* — not how far apart
+ * their bounding boxes are.
+ *
+ * The distinction decides whether two icons in a grid stay two icons. A pair
+ * drawn diagonally from each other have boxes that *overlap*, so any measure
+ * built on boxes reports a gap of zero and welds them together, while the ink
+ * itself is comfortably apart. Measuring pixel to pixel directly would be
+ * quadratic in the number of components and linear in their size on top; this
+ * is one pass over the raster regardless of how many there are.
+ *
+ * (3,4) chamfer rather than exact Euclidean: it overstates a pure diagonal by
+ * about 8% and typical distances by around 2%, which is far below the scale
+ * anything here is compared against, and it costs two sweeps instead of a
+ * parabola-envelope transform per row and column.
+ */
+export function chamferLabelDistance(
+  labels: Int32Array,
+  width: number,
+  height: number,
+): LabelDistance {
+  const size = width * height;
+  const distance = new Int32Array(size);
+  const nearest = new Int32Array(size);
+  const FAR = 0x3fffffff;
+
+  for (let i = 0; i < size; i++) {
+    if (labels[i] >= 0) {
+      distance[i] = 0;
+      nearest[i] = labels[i];
+    } else {
+      distance[i] = FAR;
+      nearest[i] = -1;
+    }
+  }
+
+  const relax = (index: number, from: number, cost: number): void => {
+    const candidate = distance[from] + cost;
+    if (candidate >= distance[index]) return;
+    distance[index] = candidate;
+    nearest[index] = nearest[from];
+  };
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (distance[index] === 0) continue;
+      if (y > 0) {
+        if (x > 0) relax(index, index - width - 1, 4);
+        relax(index, index - width, 3);
+        if (x + 1 < width) relax(index, index - width + 1, 4);
+      }
+      if (x > 0) relax(index, index - 1, 3);
+    }
+  }
+
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const index = y * width + x;
+      if (distance[index] === 0) continue;
+      if (y + 1 < height) {
+        if (x + 1 < width) relax(index, index + width + 1, 4);
+        relax(index, index + width, 3);
+        if (x > 0) relax(index, index + width - 1, 4);
+      }
+      if (x + 1 < width) relax(index, index + 1, 3);
+    }
+  }
+
+  return { distance, nearest };
 }
 
 /** Drops connected blobs smaller than `minArea` pixels. */
