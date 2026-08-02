@@ -26,6 +26,7 @@ import { LayerPanel } from './panels/LayerPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { ShapesPanel } from './panels/ShapesPanel.js';
 import { ImageImportPanel, type ImageImportMode } from './panels/ImageImportPanel.js';
+import { PackageImportPanel } from './panels/PackageImportPanel.js';
 import { HoopPanel } from './panels/HoopPanel.js';
 import { ExportPanel } from './panels/ExportPanel.js';
 import { UpdateBanner, updateStatusLabel, useUpdateState } from './components/UpdateBanner.js';
@@ -61,13 +62,14 @@ const NUDGE_KEYS: Record<string, { x: number; y: number } | undefined> = {
   ArrowDown: { x: 0, y: 1 },
 };
 
-type PanelTab = 'layers' | 'properties' | 'shapes' | 'image' | 'hoop' | 'export';
+type PanelTab = 'layers' | 'properties' | 'shapes' | 'image' | 'package' | 'hoop' | 'export';
 
 const TABS: { id: PanelTab; label: string }[] = [
   { id: 'layers', label: 'Layers' },
   { id: 'properties', label: 'Settings' },
   { id: 'shapes', label: 'Shapes' },
   { id: 'image', label: 'Image' },
+  { id: 'package', label: 'Install' },
   { id: 'hoop', label: 'Hoop' },
   { id: 'export', label: 'Export' },
 ];
@@ -218,6 +220,9 @@ export function App(): JSX.Element {
         return;
       case 'add-font':
         void addFontFile();
+        return;
+      case 'install-package':
+        setTab('package');
         return;
       case 'export':
         setTab('export');
@@ -472,6 +477,7 @@ export function App(): JSX.Element {
             {tab === 'image' && (
               <ImageImportPanel mode={imageMode} onModeChange={setImageMode} />
             )}
+            {tab === 'package' && <PackageImportPanel />}
             {tab === 'hoop' && <HoopPanel compiled={result} />}
             {tab === 'export' && <ExportPanel compiled={result} />}
           </div>

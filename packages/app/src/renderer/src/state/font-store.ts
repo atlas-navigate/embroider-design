@@ -148,11 +148,18 @@ export const useFontStore = create<FontState>((set, get) => ({
       const descriptor = describeFontBuffer(
         bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
       );
+      // Copy the file into the app's own font directory before cataloguing
+      // it. The catalog is rebuilt from disk on every launch, so a font left
+      // at its original path used to vanish on the first restart — and any
+      // design using it then warned that the font was not installed.
+      const name = file.path.split(/[\\/]/).pop() ?? 'font.ttf';
+      const [installed] = await window.embroider.installFonts([{ name, data: bytes }]);
+      const source = installed ?? file;
       const entry: FontCatalogEntry = {
         ...descriptor,
-        path: file.path,
-        byteSize: file.byteSize,
-        mtimeMs: file.mtimeMs,
+        path: source.path,
+        byteSize: source.byteSize,
+        mtimeMs: source.mtimeMs,
       };
       const catalog = buildFontCatalog([...get().catalog, entry]);
       set({ catalog, families: groupByFamily(catalog) });

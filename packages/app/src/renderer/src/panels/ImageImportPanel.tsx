@@ -11,11 +11,11 @@ import {
   unitsToMm,
   type AutoDigitizeResult,
   type LibraryShape,
-  type RgbaImage,
   type SheetScan,
 } from '@embroider-design/engine';
 import { useDocumentStore } from '../state/document-store.js';
 import { useCustomShapeStore } from '../state/custom-shape-store.js';
+import { decodeRgbaImage, type DecodedImage } from '../utils/decode-image.js';
 import {
   CheckboxField,
   Field,
@@ -41,47 +41,6 @@ import {
 
 export type ImageImportMode = 'design' | 'sheet';
 
-interface DecodedImage {
-  name: string;
-  image: RgbaImage;
-  /** Downscaled copy kept in the project file so it can be re-traced later. */
-  dataUrl: string;
-}
-
-async function decodeImage(name: string, data: Uint8Array): Promise<DecodedImage | null> {
-  // Copy into a buffer of exactly the right length: the bytes arrive over IPC
-  // as a view that may sit inside a larger pooled buffer.
-  const blob = new Blob([new Uint8Array(data).buffer]);
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(blob);
-  } catch {
-    return null;
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const context = canvas.getContext('2d');
-  if (!context) return null;
-  context.drawImage(bitmap, 0, 0);
-  const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height);
-
-  // Keep a small copy for the project file, not the original megabytes.
-  const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
-  const thumb = document.createElement('canvas');
-  thumb.width = Math.max(1, Math.round(bitmap.width * scale));
-  thumb.height = Math.max(1, Math.round(bitmap.height * scale));
-  thumb.getContext('2d')?.drawImage(bitmap, 0, 0, thumb.width, thumb.height);
-  bitmap.close();
-
-  return {
-    name,
-    image: { data: imageData.data, width: imageData.width, height: imageData.height },
-    dataUrl: thumb.toDataURL('image/png'),
-  };
-}
-
 /** Strips the extension, so "autumn-icons.jpg" suggests "autumn-icons". */
 function baseNameOf(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '').trim() || 'Icon';
@@ -90,7 +49,7 @@ function baseNameOf(fileName: string): string {
 async function pickImage(): Promise<DecodedImage | null | 'unreadable'> {
   const file = await window.embroider.openImage();
   if (!file) return null;
-  return (await decodeImage(file.name, file.data)) ?? 'unreadable';
+  return (await decodeRgbaImage(file.name, file.data)) ?? 'unreadable';
 }
 
 export function ImageImportPanel({

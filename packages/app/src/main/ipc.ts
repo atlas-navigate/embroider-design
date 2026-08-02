@@ -1,14 +1,15 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import {
   IPC,
   type ExportRequest,
+  type FontInstallFile,
   type LoadedFile,
   type LoadedText,
   type SaveRequest,
 } from '../shared/ipc-contract.js';
-import { describeFontFile, listFontFiles, readFontFile } from './fonts.js';
+import { describeFontFile, installFontFiles, listFontFiles, readFontFile } from './fonts.js';
 import { checkForUpdates, currentUpdateState, installUpdate } from './updater.js';
 
 /**
@@ -28,6 +29,16 @@ const EMBROIDERY_FILTER = {
   name: 'Embroidery files',
   extensions: ['pes', 'dst', 'exp', 'jef', 'vp3', 'xxx', 'pec'],
 };
+const PACKAGE_FILTER = {
+  name: 'Font and icon packages',
+  extensions: ['zip', 'embpkg'],
+};
+
+/**
+ * Refused before reading. Mirrors the engine's `MAX_PACKAGE_BYTES` — main does
+ * not import the engine, by design, so the number is written down twice.
+ */
+const MAX_PACKAGE_FILE_BYTES = 256 * 1024 * 1024;
 
 const FONT_CACHE_FILE = 'font-catalog.json';
 
@@ -106,6 +117,31 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     if (result.canceled || result.filePaths.length === 0) return null;
     return loadFile(result.filePaths[0]);
   });
+
+  ipcMain.handle(IPC.openPackage, async (): Promise<LoadedFile | null> => {
+    const window = getWindow();
+    if (!window) return null;
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Install a font or icon package',
+      filters: [PACKAGE_FILTER],
+      properties: ['openFile'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const path = result.filePaths[0];
+    try {
+      // Checked before the read, so a mislabelled disk image cannot pull a
+      // quarter of a gigabyte over IPC before anyone notices.
+      const info = await stat(path);
+      if (info.size > MAX_PACKAGE_FILE_BYTES) return null;
+      return await loadFile(path);
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC.installFonts, (_event, files: FontInstallFile[]) =>
+    installFontFiles(Array.isArray(files) ? files : []),
+  );
 
   ipcMain.handle(
     IPC.exportPattern,

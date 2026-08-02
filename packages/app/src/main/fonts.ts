@@ -1,8 +1,9 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { app } from 'electron';
-import type { FontFileInfo } from '../shared/ipc-contract.js';
+import type { FontFileInfo, FontInstallFile } from '../shared/ipc-contract.js';
 
 /**
  * Finding fonts: the ones bundled with the app, and the ones already on the
@@ -47,11 +48,22 @@ export function bundledFontDirectory(): string {
     : join(app.getAppPath(), 'resources', 'fonts');
 }
 
+/**
+ * Where fonts the user installs through the app live: under `userData`, for
+ * the same reasons the custom shape library does — per-user, writable without
+ * elevation, and it survives an upgrade. These are app-private; nothing here
+ * registers them with Windows.
+ */
+export function userFontDirectory(): string {
+  return join(app.getPath('userData'), 'fonts');
+}
+
 function fontDirectories(): string[] {
   // First, deliberately: `buildFontCatalog` keeps the first path it sees for a
   // given face, so a bundled copy wins over a stale system install of the same
-  // family.
-  const directories: string[] = [bundledFontDirectory()];
+  // family. The user's own installs come next — ahead of the system, because a
+  // face somebody installed on purpose beats a stale system copy of it.
+  const directories: string[] = [bundledFontDirectory(), userFontDirectory()];
 
   const windir = process.env.WINDIR ?? process.env.SystemRoot;
   if (windir) directories.push(join(windir, 'Fonts'));
@@ -134,4 +146,59 @@ export async function describeFontFile(path: string): Promise<FontFileInfo | nul
   } catch {
     return null;
   }
+}
+
+/** Bigger than any real font; a package entry claiming more is not one. */
+const INSTALLED_FONT_MAX_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Only ever a base name. The bytes may come out of a zip whose entry names are
+ * attacker-chosen, so everything path-like is stripped before the name touches
+ * the filesystem, and anything that is not a plain `.ttf`/`.otf` name after
+ * that is refused.
+ */
+function sanitizedFontFileName(name: string): string | null {
+  const base = name.replace(/\\/g, '/').split('/').pop() ?? '';
+  // eslint-disable-next-line no-control-regex
+  const cleaned = base.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').trim();
+  if (cleaned.startsWith('.') || !isFontFile(cleaned)) return null;
+  return cleaned;
+}
+
+/**
+ * Copies fonts into `userFontDirectory`, where the next scan will find them.
+ *
+ * A name collision gets a ` (2)` suffix rather than an overwrite: replacing a
+ * font file another design is using, silently, with different outlines, is the
+ * kind of favour nobody asked for. Unwritable or refused files are skipped —
+ * the caller compares what it sent with what came back.
+ */
+export async function installFontFiles(
+  files: readonly FontInstallFile[],
+): Promise<FontFileInfo[]> {
+  const directory = userFontDirectory();
+  await mkdir(directory, { recursive: true });
+
+  const installed: FontFileInfo[] = [];
+  for (const file of files) {
+    const cleaned = sanitizedFontFileName(file.name);
+    if (!cleaned || file.data.length === 0 || file.data.length > INSTALLED_FONT_MAX_BYTES) {
+      continue;
+    }
+    const dot = cleaned.lastIndexOf('.');
+    const stem = cleaned.slice(0, dot);
+    const extension = cleaned.slice(dot);
+    let target = join(directory, cleaned);
+    for (let attempt = 2; existsSync(target); attempt++) {
+      target = join(directory, `${stem} (${attempt})${extension}`);
+    }
+    try {
+      await writeFile(target, Buffer.from(file.data));
+    } catch {
+      continue;
+    }
+    const info = await describeFontFile(target);
+    if (info) installed.push(info);
+  }
+  return installed;
 }

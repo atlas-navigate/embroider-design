@@ -3,6 +3,7 @@ import {
   IPC,
   type EmbroiderApi,
   type ExportRequest,
+  type FontInstallFile,
   type MenuCommand,
   type SaveRequest,
   type UpdateState,
@@ -25,12 +26,14 @@ const api: EmbroiderApi = {
 
   openImage: () => ipcRenderer.invoke(IPC.openImage),
   openEmbroidery: () => ipcRenderer.invoke(IPC.openEmbroidery),
+  openPackage: () => ipcRenderer.invoke(IPC.openPackage),
   exportPattern: (request: ExportRequest, data: Uint8Array) =>
     ipcRenderer.invoke(IPC.exportPattern, request, data),
 
   listFontFiles: () => ipcRenderer.invoke(IPC.listFontFiles),
   readFontFile: (path: string) => ipcRenderer.invoke(IPC.readFontFile, path),
   pickFontFile: () => ipcRenderer.invoke(IPC.pickFontFile),
+  installFonts: (files: FontInstallFile[]) => ipcRenderer.invoke(IPC.installFonts, files),
   readFontCache: () => ipcRenderer.invoke(IPC.readFontCache),
   writeFontCache: (text: string) => ipcRenderer.invoke(IPC.writeFontCache, text),
 

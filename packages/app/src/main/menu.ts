@@ -35,6 +35,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null): Menu {
         },
         { label: 'Open embroidery file…', click: send('import-embroidery') },
         { label: 'Add a font file…', click: send('add-font') },
+        { label: 'Install a font or icon package…', click: send('install-package') },
         { type: 'separator' },
         { label: 'Export to machine file…', accelerator: 'CmdOrCtrl+E', click: send('export') },
         { type: 'separator' },

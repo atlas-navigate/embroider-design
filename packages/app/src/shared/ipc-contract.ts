@@ -27,6 +27,13 @@ export interface FontFileInfo {
   mtimeMs: number;
 }
 
+/** A font on its way into the app's own font directory. */
+export interface FontInstallFile {
+  /** Base name with extension. Main sanitises it again; it never trusts this. */
+  name: string;
+  data: Uint8Array;
+}
+
 /**
  * Where the app is in the update cycle.
  *
@@ -51,6 +58,7 @@ export type MenuCommand =
   | 'import-icon-sheet'
   | 'import-embroidery'
   | 'add-font'
+  | 'install-package'
   | 'export'
   | 'zoom-in'
   | 'zoom-out'
@@ -94,11 +102,15 @@ export interface EmbroiderApi {
 
   openImage(): Promise<LoadedFile | null>;
   openEmbroidery(): Promise<LoadedFile | null>;
+  /** A font-and-icon package: the picked archive's bytes, parsed in the renderer. */
+  openPackage(): Promise<LoadedFile | null>;
   exportPattern(request: ExportRequest, data: Uint8Array): Promise<string | null>;
 
   listFontFiles(): Promise<FontFileInfo[]>;
   readFontFile(path: string): Promise<Uint8Array | null>;
   pickFontFile(): Promise<FontFileInfo | null>;
+  /** Copies fonts into the app's own font directory, so they survive a restart. */
+  installFonts(files: FontInstallFile[]): Promise<FontFileInfo[]>;
   readFontCache(): Promise<string | null>;
   writeFontCache(text: string): Promise<void>;
 
@@ -133,10 +145,12 @@ export const IPC = {
   saveProject: 'file:save-project',
   openImage: 'file:open-image',
   openEmbroidery: 'file:open-embroidery',
+  openPackage: 'file:open-package',
   exportPattern: 'file:export-pattern',
   listFontFiles: 'fonts:list',
   readFontFile: 'fonts:read',
   pickFontFile: 'fonts:pick',
+  installFonts: 'fonts:install',
   readFontCache: 'fonts:cache-read',
   writeFontCache: 'fonts:cache-write',
   readCustomShapes: 'library:read-custom',
