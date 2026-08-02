@@ -17,6 +17,7 @@ import { app, nativeImage } from 'electron';
  *     npm run build -w @embroider-design/engine
  *     npx electron packages/app/scripts/scan-sheets.mjs
  *     npx electron packages/app/scripts/scan-sheets.mjs --crops
+ *     npx electron packages/app/scripts/scan-sheets.mjs --trace
  *
  * Electron rather than plain Node, and in this package rather than in the
  * engine's, for one reason: something has to decode a JPEG. The engine promises
@@ -37,6 +38,7 @@ const outputDirectory = join(root, 'packages', 'app', 'sheet-scan');
 const args = process.argv.slice(2);
 const wantCrops = args.includes('--crops');
 const wantJson = args.includes('--json');
+const wantTrace = args.includes('--trace');
 const filters = args.filter((argument) => !argument.startsWith('--'));
 
 function optionValue(name, fallback) {
@@ -187,6 +189,75 @@ async function main() {
         const tag = String(cell.index + 1).padStart(3, '0');
         const suffix = cell.likelyLabel ? `-${cell.labelReason ?? 'label'}` : '';
         await encodePng(cell.crop(), join(cropDirectory, `${tag}${suffix}.png`));
+      }
+    }
+
+    if (wantTrace) {
+      // The second half of the import: run the tracer over every kept crop,
+      // exactly as the panel does, and report how much of the ink came back as
+      // filled regions. Coverage near 1 is a fully filled icon; well under 1
+      // is the "not fully filled in" complaint, made measurable. Slightly over
+      // 1 is normal — the seam-closing overlap and enclosed ground-coloured
+      // pockets both count as traced area without counting as ink.
+      const ground = {
+        r: scan.background[0],
+        g: scan.background[1],
+        b: scan.background[2],
+      };
+      let coverageSum = 0;
+      let coverageMin = Infinity;
+      let tracedCount = 0;
+      for (const cell of scan.cells) {
+        if (cell.likelyLabel) continue;
+        const crop = cell.crop();
+        const traced = engine.mergeSimilarColors(
+          engine.autoDigitizeImage(crop, {
+            targetWidth: 100,
+            colors: 5,
+            removeBackground: true,
+            morphology: 1,
+            minRegionAreaMm2: 0.09,
+          }),
+        );
+
+        const unitsPerPixel = 100 / traced.rasterWidth;
+        let net = 0;
+        for (const colour of traced.colors) {
+          for (const region of colour.regions) {
+            net += Math.abs(engine.polygonArea(region.outer));
+            for (const hole of region.holes) net -= Math.abs(engine.polygonArea(hole));
+          }
+        }
+        const tracedPixels = net / (unitsPerPixel * unitsPerPixel);
+
+        let inkPixels = 0;
+        for (let i = 0; i < crop.width * crop.height; i++) {
+          const colour = {
+            r: crop.data[i * 4],
+            g: crop.data[i * 4 + 1],
+            b: crop.data[i * 4 + 2],
+          };
+          if (engine.threadDistance(colour, ground) >= 40) inkPixels++;
+        }
+        const rasterScale = traced.rasterWidth / crop.width;
+        const inkAtRaster = inkPixels * rasterScale * rasterScale;
+        const coverage = inkAtRaster > 0 ? tracedPixels / inkAtRaster : 1;
+
+        coverageSum += coverage;
+        coverageMin = Math.min(coverageMin, coverage);
+        tracedCount++;
+        console.log(
+          `    crop ${String(cell.index + 1).padStart(3, '0')}` +
+            `  colours ${traced.colors.length}` +
+            ` (+${traced.droppedColors.length} dropped)` +
+            `  coverage ${coverage.toFixed(2)}`,
+        );
+      }
+      if (tracedCount > 0) {
+        console.log(
+          `${' '.repeat(42)} traced ${tracedCount} crops · mean coverage ` +
+            `${(coverageSum / tracedCount).toFixed(2)} · worst ${coverageMin.toFixed(2)}`,
+        );
       }
     }
 

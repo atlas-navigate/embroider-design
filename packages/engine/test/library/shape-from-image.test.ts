@@ -146,6 +146,28 @@ describe('libraryShapeFromImage', () => {
     expect(shape?.parts[shape.parts.length - 1].name).not.toBe('Outline');
   });
 
+  it('keeps an enclosed pale interior as a part of its own', () => {
+    // A dark donut on white: the hole's white is part of the icon. It used to
+    // be struck off with the page background — the palette entry nearest the
+    // border was skipped everywhere — leaving bare fabric inside the ring.
+    const image = page(120, 120);
+    disc(image, 60, 60, 48, DARK);
+    disc(image, 60, 60, 28, WHITE);
+
+    const shape = libraryShapeFromImage(image, { name: 'Donut', colors: 3 });
+    expect(shape).not.toBeNull();
+    if (!shape) return;
+
+    expect(shape.parts.length).toBeGreaterThanOrEqual(2);
+    const pale = shape.parts.find((part) => {
+      const r = Number.parseInt(part.color?.slice(1, 3) ?? '00', 16);
+      return r > 200;
+    });
+    expect(pale).toBeDefined();
+    // Pale is the drawing's interior, not its keyline.
+    expect(pale?.name).not.toBe('Outline');
+  });
+
   it('keeps a feature the digitizer would drop at its own default size', () => {
     // A 6 px dot in a 120 px icon is about 5 % of it — well under the 1 mm²
     // that `autoDigitizeImage` drops by default once the design is nominally

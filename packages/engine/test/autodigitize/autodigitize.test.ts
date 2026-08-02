@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { polygonArea } from '../../src/geometry/path.js';
+import { pointInPolygonWithHoles, polygonArea } from '../../src/geometry/path.js';
 import { mmToUnits } from '../../src/pattern/units.js';
 import {
   borderColor,
@@ -281,13 +281,20 @@ describe('autoDigitizeImage', () => {
     return image;
   }
 
-  it('drops the background and keeps the subject colours', () => {
+  it('drops only the border-connected ground, keeping an enclosed pocket', () => {
     const result = autoDigitizeImage(logo(), {
       targetWidth: mmToUnits(60),
       colors: 3,
       removeBackground: true,
     });
-    expect(result.colors).toHaveLength(2);
+    // The page around the artwork is gone, but the white *inside* the ring is
+    // part of the drawing and survives as a colour of its own. Deleting every
+    // pixel of the ground's palette entry is how eye-whites and highlights
+    // used to come back as bare fabric.
+    expect(result.colors).toHaveLength(3);
+    const white = result.colors.find((entry) => entry.color.r > 200 && entry.color.g > 200);
+    expect(white).toBeDefined();
+    expect(white!.regions).toHaveLength(1);
     expect(result.background).not.toBeNull();
     expect(result.background!.r).toBeGreaterThan(200);
   });
@@ -336,6 +343,74 @@ describe('autoDigitizeImage', () => {
     const result = autoDigitizeImage(logo(), { targetWidth: mmToUnits(60), maxDimension: 60 });
     expect(result.rasterWidth).toBe(60);
     expect(result.rasterHeight).toBe(40);
+  });
+});
+
+describe('autoDigitizeImage leaves no bare fabric inside the artwork', () => {
+  function covered(result: ReturnType<typeof autoDigitizeImage>, x: number, y: number): boolean {
+    return result.colors.some((entry) =>
+      entry.regions.some((region) => pointInPolygonWithHoles({ x, y }, region.outer, region.holes)),
+    );
+  }
+
+  it('keeps the seam between two colours filled', () => {
+    // Two blocks with the thin blend stripe a JPEG leaves along their join.
+    // The stripe takes a palette entry of its own, and cleaning each colour's
+    // mask separately used to erase it — leaving an unfilled hairline down
+    // every colour boundary, given to no other colour.
+    const image = createRgbaImage(120, 80, [255, 255, 255]);
+    for (let y = 20; y < 60; y++) {
+      for (let x = 20; x < 58; x++) setPixel(image, x, y, [220, 20, 30]);
+      for (let x = 58; x < 60; x++) setPixel(image, x, y, [120, 35, 120]);
+      for (let x = 60; x < 100; x++) setPixel(image, x, y, [20, 50, 210]);
+    }
+
+    const result = autoDigitizeImage(image, {
+      targetWidth: mmToUnits(60),
+      colors: 4,
+      removeBackground: true,
+    });
+
+    // Five design units to a pixel. Every interior point of the artwork is
+    // inside some traced region — most importantly the ones down the stripe.
+    for (let y = 25; y <= 55; y += 5) {
+      expect(covered(result, 59 * 5, y * 5)).toBe(true);
+    }
+    for (let y = 25; y <= 55; y += 10) {
+      for (let x = 25; x <= 95; x += 5) {
+        expect(covered(result, x * 5, y * 5)).toBe(true);
+      }
+    }
+  });
+
+  it('fills a feature too small to sew with the colour around it', () => {
+    // A 2x2 fleck inside a pale disc is under the keep-threshold. It used to
+    // be traced, size-filtered, and deleted — a pinhole of bare fabric. Now
+    // its pixels join the disc before anything is traced.
+    const image = createRgbaImage(100, 100, [255, 255, 255]);
+    for (let y = 0; y < 100; y++) {
+      for (let x = 0; x < 100; x++) {
+        if ((x - 50) ** 2 + (y - 50) ** 2 <= 30 ** 2) setPixel(image, x, y, [232, 176, 96]);
+      }
+    }
+    setPixel(image, 49, 49, [10, 10, 10]);
+    setPixel(image, 50, 49, [10, 10, 10]);
+    setPixel(image, 49, 50, [10, 10, 10]);
+    setPixel(image, 50, 50, [10, 10, 10]);
+
+    const result = autoDigitizeImage(image, {
+      targetWidth: 100,
+      colors: 3,
+      removeBackground: true,
+      minRegionAreaMm2: 0.09,
+    });
+
+    expect(result.colors).toHaveLength(1);
+    const disc = result.colors[0];
+    expect(disc.color.r).toBeGreaterThan(180);
+    expect(disc.regions).toHaveLength(1);
+    expect(disc.regions[0].holes).toHaveLength(0);
+    expect(covered(result, 50, 50)).toBe(true);
   });
 });
 

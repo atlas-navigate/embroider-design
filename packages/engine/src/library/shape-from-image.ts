@@ -1,6 +1,6 @@
 import { regionToRings } from '../geometry/regions.js';
 import { applyToPoints } from '../geometry/transform.js';
-import { threadLuminance, threadToHex, type ThreadColor } from '../pattern/thread.js';
+import { thread, threadLuminance, threadToHex, type ThreadColor } from '../pattern/thread.js';
 import type { RgbaImage } from '../autodigitize/image-data.js';
 import { autoDigitizeImage, mergeSimilarColors } from '../autodigitize/pipeline.js';
 import { createCustomShapeId } from './custom-shape.js';
@@ -51,16 +51,25 @@ const DEFAULT_SMOOTHING = 1;
  * `autoDigitizeImage` measures this in square millimetres of *finished design*,
  * and its 1 mm² default is calibrated for one imported at its real size. Traced
  * into the 100-unit authoring box the whole icon is nominally 10 mm across, so
- * that default would throw away anything under a tenth of the icon — every eye,
- * every nostril, every highlight. Three units square is the honest threshold
- * here: below that nothing survives being sewn anyway.
+ * that default would fold anything under a tenth of the icon into the colour
+ * around it — every eye, every nostril, every highlight. Three units square is
+ * the honest threshold here: below that a feature merges into its surroundings,
+ * which is also all the needle would have made of it.
  */
 const MIN_FEATURE_UNITS = 3;
 
 /** Above this share of the icon a dark colour is the subject, not its outline. */
 const KEYLINE_MAX_COVERAGE = 0.25;
-/** Below this luminance a colour reads as the dark that draws edges. */
-const KEYLINE_MAX_LUMINANCE = 96;
+/**
+ * Below this luminance a colour reads as the dark that draws edges.
+ *
+ * `threadLuminance` is linear-light on a 0-1 scale, so the threshold has to be
+ * too: this is the luminance of the mid-grey whose 8-bit channels are 96. As a
+ * bare `96` the gate was above every colour there is and never fired — which
+ * went unseen while the digitizer deleted every pale colour with the page, and
+ * surfaced the moment an eye-white survived and was offered up as a "keyline".
+ */
+const KEYLINE_MAX_LUMINANCE = threadLuminance(thread(96, 96, 96));
 
 interface TracedPart {
   part: LibraryPart;

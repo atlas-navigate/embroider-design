@@ -618,14 +618,45 @@ export function scanIconSheet(image: RgbaImage, options: SheetScanOptions = {}):
   ordered.forEach((cluster, index) => {
     for (const label of cluster.labels) ownerOfLabel.set(label, index);
   });
+
+  const padding = options.padding ?? DEFAULT_PADDING;
+
+  // A cluster the size filter rejected is not page furniture — more often it
+  // is a stray flourish of a real icon: a detached sparkle, a scattered coin,
+  // a shadow the reach did not gather. Left unowned it would be painted out of
+  // *every* crop, including the crop of the icon it belongs to, and the
+  // missing piece shows up as a ground-coloured bite. If the whole of it sits
+  // inside exactly one kept cell's padded box, that cell adopts it; a piece
+  // two cells could claim stays out, because a wrong guess welds neighbours.
+  if (rejected.size > 0 && ordered.length > 0) {
+    const adoptBoxes = ordered.map((cluster) => padded(cluster.box, padding));
+    for (const component of components) {
+      if (!rejected.has(component.label) || ownerOfLabel.has(component.label)) continue;
+      let adopter = -1;
+      for (let index = 0; index < adoptBoxes.length; index++) {
+        const box = adoptBoxes[index];
+        const inside =
+          component.box.minX >= box.minX &&
+          component.box.maxX <= box.maxX &&
+          component.box.minY >= box.minY &&
+          component.box.maxY <= box.maxY;
+        if (!inside) continue;
+        if (adopter >= 0) {
+          adopter = -1;
+          break;
+        }
+        adopter = index;
+      }
+      if (adopter >= 0) ownerOfLabel.set(component.label, adopter);
+    }
+  }
+
   for (let i = 0; i < labels.length; i++) {
     const label = labels[i];
     if (label < 0) continue;
     const at = ownerOfLabel.get(label);
     owner[i] = at ?? BLOCKED;
   }
-
-  const padding = options.padding ?? DEFAULT_PADDING;
   const cells = ordered.map((cluster, index): SheetCell => {
     const box = padded(cluster.box, padding);
     const sourceBox = mapToSource(box, scaleX, scaleY);

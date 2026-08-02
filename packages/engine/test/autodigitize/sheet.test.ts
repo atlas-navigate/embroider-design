@@ -524,6 +524,35 @@ describe('scanIconSheet crops', () => {
     expect(squaresAcross(coarse)).toBeLessThan(3);
   });
 
+  it('lets a cell adopt a rejected mark that sits wholly inside its box', () => {
+    // Three ring icons; the first has a small detached dot in its hollow.
+    // With a minimum size that rejects the dot's own cluster, the dot used to
+    // become BLOCKED — painted out of every crop *including its own icon's*,
+    // which showed up as a ground-coloured bite in the artwork. The only cell
+    // whose padded box contains the whole of it now adopts it.
+    const image = page(400, 400);
+    const ring = (cx: number, cy: number): void => {
+      disc(image, cx, cy, 30, INK);
+      disc(image, cx, cy, 18, WHITE);
+    };
+    ring(100, 100);
+    ring(250, 100);
+    ring(100, 250);
+    disc(image, 100, 100, 4, INK);
+
+    const scan = scanIconSheet(image, { separation: 8, minCellShare: 0.001 });
+    expect(scan.cells).toHaveLength(3);
+    const cellA = scan.cells.find(
+      (cell) =>
+        cell.box.minX <= 100 && cell.box.maxX >= 100 && cell.box.minY <= 100 && cell.box.maxY >= 100,
+    );
+    expect(cellA).toBeDefined();
+    if (!cellA) return;
+
+    const crop = cellA.crop();
+    expect(isInk(crop, 100 - cellA.sourceBox.minX, 100 - cellA.sourceBox.minY)).toBe(true);
+  });
+
   it('keeps a neighbour out of the crop even when the crop is upscaled', () => {
     // The own/foreign decision is made on the detection raster and applied to
     // source pixels, so at a scale of four it is taken in blocks of four. It
