@@ -86,7 +86,18 @@ shortcut is the answer. If you want to launch it from a terminal anyway:
   click to leave any out before committing; captions, headings and format rows
   are recognised and start unticked, but never dropped. The joining distance and
   the background tolerance are worked out for you and can be taken over, and
-  there is a plain rows-and-columns mode for pages it cannot read on its own
+  there is a plain rows-and-columns mode for pages it cannot read on its own.
+  Icons come back **filled edge to edge**: an eye-white or pale interior is kept
+  as a colour of its own instead of vanishing with the page, colour boundaries
+  meet without a hairline of bare fabric between them, and a feature too small
+  to sew melts into the colour around it rather than leaving a pinhole
+- **Install font and icon packages.** One zip, everything in it installed in one
+  go: fonts (.ttf/.otf) are copied into the app and survive a restart, icon
+  images and SVGs are traced into your shape library under a collection the
+  package names, and a shape file exported from this app installs exactly as it
+  was. File ▸ Install a font or icon package… shows what is inside before
+  anything is written, and entries the app cannot use are skipped and counted,
+  never a reason to abort the rest
 - **Delete what you do not want.** Remove saved shapes one at a time or by the
   selection, delete a whole collection when an import comes out wrong, and hide
   the shipped icons you never use. Hidden icons stay installed and come back
